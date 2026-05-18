@@ -1,275 +1,363 @@
 // @ts-nocheck
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
-const PMAS_URL = "https://example.com/pmas";
+// ── カラーパレット ────────────────────────────────────────────────────────────
+const C = {
+  mint:     "#10B981",
+  mintL:    "#ECFDF5",
+  mintB:    "#A7F3D0",
+  blue:     "#3B82F6",
+  blueL:    "#EFF6FF",
+  blueB:    "#BFDBFE",
+  lav:      "#8B5CF6",
+  lavL:     "#F5F3FF",
+  lavB:     "#DDD6FE",
+  coral:    "#F97316",
+  coralL:   "#FFF7ED",
+  coralB:   "#FED7AA",
+  navy:     "#1E3A5F",
+  white:    "#FFFFFF",
+  offwhite: "#F8FAFC",
+  muted:    "#64748B",
+  dark:     "#0F172A",
+  border:   "#E2E8F0",
+};
 
-// ── 質問データ（各問に専用の選択肢 + スコア） ──────────────────────────────
-// score: 良い状態ほど高い（0〜5点）
+// ── 24問 質問データ ───────────────────────────────────────────────────────────
 const QUESTIONS = [
   {
-    id: 1, text: "朝起きた時、体の感じはどうですか？",
+    id: 1, text: "朝起きた時、体は軽いと感じますか？",
     options: [
-      { label: "スッキリ！体が軽い 🌅",         score: 5 },
-      { label: "まあまあ普通かな",               score: 3 },
-      { label: "少し重だるい",                   score: 2 },
-      { label: "毎朝しんどい…",                  score: 0 },
+      { label: "すごく軽い！スッキリ 🌅", score: 5 },
+      { label: "まあまあ普通", score: 3 },
+      { label: "少し重だるい", score: 2 },
+      { label: "毎朝かなりしんどい", score: 0 },
     ],
   },
   {
-    id: 2, text: "日中（午後など）に眠気はきますか？",
+    id: 2, text: "日中の集中力は続きやすいですか？",
     options: [
-      { label: "ほとんどない、元気です ✨",       score: 5 },
-      { label: "少し眠くなることがある",          score: 3 },
-      { label: "よく眠くなる",                   score: 2 },
-      { label: "毎日かなり眠い…",               score: 0 },
+      { label: "長時間集中できる 🧠", score: 5 },
+      { label: "まあまあ続く", score: 3 },
+      { label: "すぐ散漫になる", score: 2 },
+      { label: "ほぼ集中できない", score: 0 },
     ],
   },
   {
-    id: 3, text: "甘いものや炭水化物を食べたい衝動はありますか？",
+    id: 3, text: "食後に眠気やだるさを感じますか？",
     options: [
-      { label: "あまり気にならない 💪",           score: 5 },
-      { label: "たまにある",                     score: 3 },
-      { label: "けっこう欲しくなる",             score: 2 },
-      { label: "毎日ものすごく欲しい！",          score: 0 },
+      { label: "ほとんど感じない 😊", score: 5 },
+      { label: "たまに感じる", score: 3 },
+      { label: "よく感じる", score: 2 },
+      { label: "毎回かなり感じる", score: 0 },
     ],
   },
   {
-    id: 4, text: "食後はどんな感じですか？",
+    id: 4, text: "甘いものや炭水化物を強く欲しくなることはありますか？",
     options: [
-      { label: "スッキリして元気 😊",            score: 5 },
-      { label: "少しだるくなることがある",        score: 3 },
-      { label: "よく眠くなる・だるくなる",       score: 2 },
-      { label: "毎回かなり眠い・しんどい",        score: 0 },
+      { label: "あまりない 💪", score: 5 },
+      { label: "たまにある", score: 3 },
+      { label: "けっこうある", score: 2 },
+      { label: "毎日強く欲しくなる", score: 0 },
     ],
   },
   {
-    id: 5, text: "お通じのリズムはどうですか？",
+    id: 5, text: "便通のリズムは安定していますか？",
     options: [
-      { label: "毎日スムーズ ✅",                score: 5 },
-      { label: "だいたい規則正しい",             score: 3 },
-      { label: "3〜4日に1回ほど",               score: 2 },
-      { label: "週1回以下か、ほぼ毎日下痢気味",  score: 0 },
+      { label: "毎日かなり安定 ✅", score: 5 },
+      { label: "だいたい安定している", score: 3 },
+      { label: "不規則になりやすい", score: 2 },
+      { label: "かなり乱れている", score: 0 },
     ],
   },
   {
     id: 6, text: "お腹の張りやガスが気になることはありますか？",
     options: [
-      { label: "ほとんどない 😌",               score: 5 },
-      { label: "たまに気になる",                 score: 3 },
-      { label: "よく気になる",                   score: 2 },
-      { label: "毎日すごく気になる",             score: 0 },
+      { label: "ほとんどない 😌", score: 5 },
+      { label: "たまに気になる", score: 3 },
+      { label: "よく気になる", score: 2 },
+      { label: "毎日すごく気になる", score: 0 },
     ],
   },
   {
-    id: 7, text: "肌荒れやニキビはどうですか？",
+    id: 7, text: "外食や脂っこい食事の後、体が重く感じることはありますか？",
     options: [
-      { label: "ほとんどない 🌸",               score: 5 },
-      { label: "たまに出る",                     score: 3 },
-      { label: "よく出る",                       score: 2 },
-      { label: "ずっと気になっている",            score: 0 },
+      { label: "あまり感じない 👍", score: 5 },
+      { label: "たまに感じる", score: 3 },
+      { label: "よく感じる", score: 2 },
+      { label: "毎回かなり感じる", score: 0 },
     ],
   },
   {
-    id: 8, text: "肌の乾燥やくすみは気になりますか？",
+    id: 8, text: "食べすぎた翌日、むくみ・だるさ・胃腸の重さを感じますか？",
     options: [
-      { label: "うるツヤで満足 💆",              score: 5 },
-      { label: "少し気になる程度",               score: 3 },
-      { label: "けっこう気になる",               score: 2 },
-      { label: "かなり悩んでいる",               score: 0 },
+      { label: "ほとんど感じない 💨", score: 5 },
+      { label: "少し感じる程度", score: 3 },
+      { label: "けっこう感じる", score: 2 },
+      { label: "毎回ひどく感じる", score: 0 },
     ],
   },
   {
-    id: 9, text: "むくみやすさはどうですか？",
+    id: 9, text: "肌荒れ、ニキビ、赤みなどが気になることはありますか？",
     options: [
-      { label: "ほとんどむくまない 👍",          score: 5 },
-      { label: "たまにむくむ",                   score: 3 },
-      { label: "よくむくむ",                     score: 2 },
-      { label: "毎日むくんでいる",               score: 0 },
+      { label: "ほとんどない 🌸", score: 5 },
+      { label: "たまに出る", score: 3 },
+      { label: "よく出る", score: 2 },
+      { label: "ずっと気になっている", score: 0 },
     ],
   },
   {
-    id: 10, text: "手足の冷えはどうですか？",
+    id: 10, text: "肌の乾燥、くすみ、ハリ不足が気になることはありますか？",
     options: [
-      { label: "冷えをあまり感じない 🔥",        score: 5 },
-      { label: "少し冷えることがある",           score: 3 },
-      { label: "よく冷える",                     score: 2 },
-      { label: "1年中かなり冷えている",          score: 0 },
+      { label: "あまり気にならない ✨", score: 5 },
+      { label: "少し気になる程度", score: 3 },
+      { label: "けっこう気になる", score: 2 },
+      { label: "かなり悩んでいる", score: 0 },
     ],
   },
   {
-    id: 11, text: "睡眠の質はどうですか？",
+    id: 11, text: "髪や爪のコンディションが気になることはありますか？",
     options: [
-      { label: "よく眠れて目覚めもいい 😴✨",    score: 5 },
-      { label: "まあまあ眠れている",             score: 3 },
-      { label: "途中で起きたり寝つきが悪い",     score: 2 },
-      { label: "毎晩なかなか眠れない",           score: 0 },
+      { label: "特に気にならない", score: 5 },
+      { label: "少し気になる", score: 3 },
+      { label: "よく気になる", score: 2 },
+      { label: "かなり悩んでいる", score: 0 },
     ],
   },
   {
-    id: 12, text: "ストレスがあると食欲はどう変わりますか？",
+    id: 12, text: "むくみやすいと感じますか？",
     options: [
-      { label: "あまり変わらない 😊",            score: 5 },
-      { label: "少し乱れることがある",           score: 3 },
-      { label: "食べすぎ or 食欲がなくなりやすい", score: 2 },
-      { label: "かなり乱れる",                   score: 0 },
+      { label: "ほとんどむくまない 👍", score: 5 },
+      { label: "たまにむくむ", score: 3 },
+      { label: "よくむくむ", score: 2 },
+      { label: "毎日むくんでいる", score: 0 },
     ],
   },
   {
-    id: 13, text: "生理前のコンディションはどうですか？",
+    id: 13, text: "手足の冷えや巡りの悪さを感じますか？",
     options: [
-      { label: "あまり変化を感じない 💪",        score: 5 },
-      { label: "少し不調を感じる",               score: 3 },
-      { label: "むくみ・肌荒れ・イライラがある", score: 2 },
-      { label: "毎月かなりつらい",               score: 0 },
+      { label: "あまり感じない 🔥", score: 5 },
+      { label: "少し感じることがある", score: 3 },
+      { label: "よく感じる", score: 2 },
+      { label: "1年中かなり感じる", score: 0 },
     ],
   },
   {
-    id: 14, text: "集中力はどうですか？",
+    id: 14, text: "睡眠の質は良いと感じますか？",
     options: [
-      { label: "長時間集中できる 🧠",            score: 5 },
-      { label: "まあまあ続く",                   score: 3 },
-      { label: "すぐ散漫になる",                 score: 2 },
-      { label: "ほぼ集中できない",               score: 0 },
+      { label: "よく眠れて目覚めもいい 😴", score: 5 },
+      { label: "まあまあ眠れている", score: 3 },
+      { label: "途中で起きたり寝つきが悪い", score: 2 },
+      { label: "毎晩なかなか眠れない", score: 0 },
     ],
   },
   {
-    id: 15, text: "運動した時、体の変化（汗・疲労感など）を感じますか？",
+    id: 15, text: "ストレスで食欲やお腹の調子が乱れますか？",
     options: [
-      { label: "すぐ体が反応する感じがする ✨",   score: 5 },
-      { label: "まあまあ感じる",                 score: 3 },
-      { label: "あまり感じない",                 score: 2 },
-      { label: "ほとんど変化がわからない",        score: 0 },
+      { label: "あまり乱れない 😊", score: 5 },
+      { label: "少し乱れることがある", score: 3 },
+      { label: "よく乱れる", score: 2 },
+      { label: "かなり乱れる", score: 0 },
     ],
   },
   {
-    id: 16, text: "食べすぎた翌日はどうですか？",
+    id: 16, text: "気分の落ち込みやイライラを感じることはありますか？",
     options: [
-      { label: "すぐ戻る感じがする 💨",          score: 5 },
-      { label: "1〜2日で戻る",                  score: 3 },
-      { label: "なかなか戻らない",               score: 2 },
-      { label: "ずっと引きずる",                 score: 0 },
+      { label: "ほとんどない 🌈", score: 5 },
+      { label: "たまにある", score: 3 },
+      { label: "よくある", score: 2 },
+      { label: "ほぼ毎日ある", score: 0 },
     ],
   },
   {
-    id: 17, text: "お腹まわりの重さや張りはありますか？",
+    id: 17, text: "風邪をひきやすい、疲れが抜けにくいと感じることはありますか？",
     options: [
-      { label: "気にならない 😌",               score: 5 },
-      { label: "たまに気になる",                 score: 3 },
-      { label: "よく気になる",                   score: 2 },
-      { label: "毎日ずっと気になる",             score: 0 },
+      { label: "あまりない 💪", score: 5 },
+      { label: "たまにある", score: 3 },
+      { label: "けっこうある", score: 2 },
+      { label: "かなりある", score: 0 },
     ],
   },
   {
-    id: 18, text: "気分が落ちることはありますか？",
+    id: 18, text: "運動や食事管理をしても体の変化を感じにくいですか？",
     options: [
-      { label: "ほとんどない、安定している 🌈",  score: 5 },
-      { label: "たまにある",                     score: 3 },
-      { label: "よくある",                       score: 2 },
-      { label: "ほぼ毎日落ちている",             score: 0 },
+      { label: "変化を感じやすい ✨", score: 5 },
+      { label: "まあまあ感じる", score: 3 },
+      { label: "あまり感じない", score: 2 },
+      { label: "ほとんど変化がわからない", score: 0 },
     ],
   },
   {
-    id: 19, text: "外食や間食が続いた時、コンディションはどうなりますか？",
+    id: 19, text: "お腹まわりの張りや重さが気になることはありますか？",
     options: [
-      { label: "あまり崩れない 💪",             score: 5 },
-      { label: "少し崩れる",                    score: 3 },
-      { label: "けっこう崩れる",                score: 2 },
-      { label: "すぐガタガタになる",             score: 0 },
+      { label: "気にならない 😌", score: 5 },
+      { label: "たまに気になる", score: 3 },
+      { label: "よく気になる", score: 2 },
+      { label: "毎日ずっと気になる", score: 0 },
     ],
   },
   {
-    id: 20, text: "今の自分の体、どう感じていますか？",
+    id: 20, text: "体のラインや体型が気になることはありますか？",
     options: [
-      { label: "満足！いい感じ 🌟",             score: 5 },
-      { label: "まあまあかな",                   score: 3 },
-      { label: "あまり満足できていない",         score: 2 },
-      { label: "全然納得できていない…",          score: 0 },
+      { label: "あまり気にならない", score: 5 },
+      { label: "少し気になる", score: 3 },
+      { label: "けっこう気になる", score: 2 },
+      { label: "かなり気になっている", score: 0 },
+    ],
+  },
+  {
+    id: 21, text: "食事内容によって体調や肌の調子が変わりやすいですか？",
+    options: [
+      { label: "あまり変わらない", score: 5 },
+      { label: "少し変わる", score: 3 },
+      { label: "けっこう変わる", score: 2 },
+      { label: "かなり変わりやすい", score: 0 },
+    ],
+  },
+  {
+    id: 22, text: "生活リズムが乱れると体調に出やすいですか？",
+    options: [
+      { label: "あまり出ない 💪", score: 5 },
+      { label: "少し出ることがある", score: 3 },
+      { label: "けっこう出る", score: 2 },
+      { label: "すぐ体調に出る", score: 0 },
+    ],
+  },
+  {
+    id: 23, text: "自分に合う食事・サプリ・腸活がわからないと感じますか？",
+    options: [
+      { label: "自分に合うものがわかっている", score: 5 },
+      { label: "だいたいわかっている", score: 3 },
+      { label: "あまりわからない", score: 2 },
+      { label: "全然わからない", score: 0 },
+    ],
+  },
+  {
+    id: 24, text: "今の自分の体のコンディションに満足していますか？",
+    options: [
+      { label: "満足している 🌟", score: 5 },
+      { label: "まあまあ満足", score: 3 },
+      { label: "あまり満足できていない", score: 2 },
+      { label: "全然満足できていない", score: 0 },
     ],
   },
 ];
 
-// ── カテゴリ定義 ──────────────────────────────────────────────────────────────
+// ── 8カテゴリ ─────────────────────────────────────────────────────────────────
 const CATEGORIES = [
   {
-    id: "sugar", name: "糖質・食欲バランス", emoji: "🍬",
-    questionIds: [3, 4, 12, 16],
-    lowMessage: "甘いもの欲や食後の眠気、食欲の乱れが出やすい傾向があります。ダイエットで一番つまずきやすいのは、意思の弱さではなく、食欲が乱れやすい内側の状態かもしれません。",
-    whyImportant: "食欲の調節には腸内環境が深く関わっている可能性があります。",
-    stumble: "カロリーを意識しても食欲に引っ張られやすく、継続が難しくなりがちです。",
-    tips: "食事の間隔を一定に保つ・食物繊維を先に食べる・食後すぐに歩くなどが参考になるかもしれません。",
+    id: "gut", name: "腸内リズム", emoji: "🌀", color: C.mint,
+    questionIds: [5, 6, 7, 8, 19],
+    lowMessage: "便通やお腹の張り、食後の重さなどに乱れが出やすい傾向があります。腸内リズムが整うと、体の軽さや肌コンディションにも変化を感じやすくなる可能性があります。",
+    whyImportant: "腸内リズムは体全体のコンディションに関わっている可能性があります。",
+    stumble: "腸内が整っていないと、ダイエットや美容の効果を感じにくくなることがあります。",
+    tips: "起床後に水を飲む・発酵食品を取り入れる・食物繊維を意識するなどが参考になるかもしれません。",
   },
   {
-    id: "rhythm", name: "腸内リズム", emoji: "🌀",
-    questionIds: [5, 6, 17],
-    lowMessage: "便通やお腹の張りが気になりやすい傾向があります。腸内リズムが乱れると、体の軽さや肌のコンディションにも影響を感じやすくなる可能性があります。",
-    whyImportant: "腸のリズムは体全体のコンディションに関わる可能性があります。",
-    stumble: "むくみや重さを感じやすく、体重の数字に一喜一憂しやすくなるかもしれません。",
-    tips: "起床後に水を飲む・発酵食品を取り入れる・腸を動かす軽い運動が参考になるかもしれません。",
+    id: "diet", name: "ダイエット・代謝", emoji: "🔥", color: C.coral,
+    questionIds: [3, 4, 8, 18, 20],
+    lowMessage: "食後の眠気や糖質欲求、体の変化を感じにくいなどの傾向があります。内側のコンディションが代謝に関係している可能性があります。",
+    whyImportant: "代謝の土台が整っていると、努力が結果につながりやすい可能性があります。",
+    stumble: "頑張っているのに変化を感じにくいのは、内側の状態が影響しているかもしれません。",
+    tips: "タンパク質を意識する・無理な制限より食材の質を重視するなどが参考になるかもしれません。",
   },
   {
-    id: "beauty", name: "美容コンディション", emoji: "✨",
-    questionIds: [7, 8, 13],
-    lowMessage: "肌荒れ、乾燥、くすみ、生理前の不調など、美容面にゆらぎが出やすい傾向があります。外側のケアだけでなく、内側の状態を見ることも大切かもしれません。",
-    whyImportant: "肌のコンディションは内側の状態を映している可能性があります。",
-    stumble: "スキンケアを頑張っても、内側が整っていないと変化を感じにくい場合があります。",
+    id: "beauty", name: "肌・美容コンディション", emoji: "✨", color: C.lav,
+    questionIds: [9, 10, 11, 21],
+    lowMessage: "肌荒れ、乾燥、くすみ、髪や爪のコンディション乱れが出やすい傾向があります。外側のケアとともに、内側の状態を見直す余地があるかもしれません。",
+    whyImportant: "肌や髪のコンディションは内側の状態を反映している可能性があります。",
+    stumble: "スキンケアを頑張っても内側が整っていないと変化を感じにくいことがあります。",
     tips: "水分補給・腸活・十分な睡眠が美容コンディションに関わるかもしれません。",
   },
   {
-    id: "circulation", name: "巡り・むくみ", emoji: "💧",
-    questionIds: [1, 9, 10, 15],
-    lowMessage: "朝の体の重さ、むくみ、冷えが出やすい傾向があります。体重は変わっていなくても、巡りの悪さで見た目の重さを感じることがあるかもしれません。",
+    id: "circulation", name: "巡り・むくみ", emoji: "💧", color: C.blue,
+    questionIds: [1, 12, 13, 20],
+    lowMessage: "むくみや冷え、体の重さが出やすい傾向があります。体重は変わらなくても巡りの状態で体感が変わることがあるかもしれません。",
     whyImportant: "巡りは代謝や老廃物の排出にも関わっている可能性があります。",
-    stumble: "体が冷えやすいと基礎代謝に影響する場合があり、運動しても変化を感じにくいことがあります。",
+    stumble: "冷えやむくみが続くと体全体のパフォーマンスに影響することがあります。",
     tips: "温かい飲み物・ストレッチ・入浴などが参考になるかもしれません。",
   },
   {
-    id: "sleep", name: "睡眠・ストレス", emoji: "🌙",
-    questionIds: [2, 11, 12, 18],
-    lowMessage: "睡眠の質やストレスが、食欲・集中力・体の重さに影響している可能性があります。頑張る量を増やす前に、回復できる体かを見直すことが大切かもしれません。",
+    id: "sleep", name: "睡眠・ストレス", emoji: "🌙", color: C.lav,
+    questionIds: [14, 15, 16, 22],
+    lowMessage: "睡眠の質やストレスが体調・食欲・気分に影響している可能性があります。回復できる体かどうかを見直すことが大切かもしれません。",
     whyImportant: "睡眠不足はホルモンバランスや食欲に関わる可能性があります。",
-    stumble: "疲れているほど糖質を欲しやすくなる傾向があり、ダイエットが続かない原因になりやすいです。",
+    stumble: "疲れているほど糖質を欲しやすくなり、生活習慣が乱れやすくなります。",
     tips: "就寝前のスクリーン時間を減らす・深呼吸・ぬるめのお風呂が参考になるかもしれません。",
   },
   {
-    id: "metabolism", name: "代謝・体感変化", emoji: "🔥",
-    questionIds: [14, 15, 16, 19, 20],
-    lowMessage: "運動や食事管理をしても変化を感じにくい傾向があります。努力の方向性が合っているか、自分の内側の状態を確認することがヒントになるかもしれません。",
-    whyImportant: "代謝の土台が整っていると、努力が結果につながりやすい可能性があります。",
-    stumble: "頑張っているのに結果が出ないと感じると、モチベーションが続きにくくなります。",
-    tips: "タンパク質を意識する・筋肉量を保つ食事・無理な制限より食材の質が参考になるかもしれません。",
+    id: "health", name: "健康コンディション", emoji: "🛡️", color: C.mint,
+    questionIds: [2, 17, 22],
+    lowMessage: "集中力の低下や疲れやすさ、免疫コンディションのゆらぎ傾向があります。内側から整えることで変化を感じやすくなる可能性があります。",
+    whyImportant: "健康コンディションの土台が整うと日々のパフォーマンスに影響する可能性があります。",
+    stumble: "疲れが抜けにくいと、モチベーションが続きにくくなることがあります。",
+    tips: "規則正しい生活リズム・栄養バランス・適度な運動が参考になるかもしれません。",
+  },
+  {
+    id: "appetite", name: "食欲・糖質バランス", emoji: "🍬", color: C.coral,
+    questionIds: [3, 4, 15, 23],
+    lowMessage: "糖質欲求や食欲の乱れが出やすい傾向があります。意思の問題ではなく、内側のコンディションが関係している可能性があります。",
+    whyImportant: "食欲の調節には腸内環境が深く関わっている可能性があります。",
+    stumble: "食欲が乱れやすいと、食事管理の継続が難しくなりがちです。",
+    tips: "食事の間隔を一定に保つ・食物繊維を先に食べる・食後に軽く歩くなどが参考になるかもしれません。",
+  },
+  {
+    id: "personal", name: "パーソナル理解度", emoji: "🔍", color: C.blue,
+    questionIds: [21, 23, 24],
+    lowMessage: "自分に合う食事・サプリ・腸活がわからない、または体のコンディションに満足できていない傾向があります。感覚だけでなく、データをもとに自分を知るきっかけが必要かもしれません。",
+    whyImportant: "自分の体を知ることで、より効果的な選択ができる可能性があります。",
+    stumble: "自分に合わない方法を続けることで、結果が出ずに諦めやすくなることがあります。",
+    tips: "腸内環境を確認することで、パーソナルな選択肢が広がるかもしれません。",
   },
 ];
 
+// ── スコアタイプ ──────────────────────────────────────────────────────────────
 const SCORE_TYPES = [
-  {
-    min: 80, max: 100, charState: "kirara",
-    title: "キラキラ内側美人タイプ",
-    description: "内側のコンディションはかなり良い傾向です。痩せやすさや美容コンディションを支える土台が整っている可能性があります。ただし、感覚だけでは腸内環境の詳細まではわかりません。PMASで確認することで、今の良い状態をさらに理解するきっかけになります。",
-  },
-  {
-    min: 60, max: 79, charState: "yuragi",
-    title: "あと一歩で整うゆらぎタイプ",
-    description: "大きく崩れてはいないものの、睡眠・食欲・むくみ・肌などにゆらぎが出やすい傾向があります。少し整えるだけで、ダイエットや美容の体感が変わる可能性があります。PMASで内側を確認することで、自分に合った整え方を考えるヒントになります。",
-  },
-  {
-    min: 40, max: 59, charState: "otsukare",
-    title: "がんばってるのに結果が出にくいタイプ",
-    description: "食事や運動を頑張っていても、内側のコンディションが整っていないことで結果を感じにくい可能性があります。むくみ、食欲の乱れ、睡眠、腸内バランスなどを見直す余地があります。感覚だけで頑張り続けるより、PMASで自分の内側を確認することが近道になるかもしれません。",
-  },
-  {
-    min: 0, max: 39, charState: "guttari",
-    title: "内側から見直したいお疲れタイプ",
-    description: "体の重さ、食欲の乱れ、睡眠、肌、むくみなど複数の項目に不調のサインが出ている可能性があります。今の状態で無理な食事制限や運動を続けるより、まず自分の内側を知ることが大切かもしれません。PMASで腸内環境やマイクロバイオームを確認することで、今まで見えなかったヒントに気づける可能性があります。",
-  },
+  { min: 85, max: 100, charState: "great",    title: "内側コンディション良好タイプ",   description: "内側のコンディションはかなり整っている傾向です。今の状態をさらに深く知ることで、より自分に合ったケアができる可能性があります。" },
+  { min: 70, max: 84,  charState: "good",     title: "整いかけタイプ",               description: "大きく崩れてはいないものの、いくつかのカテゴリにゆらぎが見られます。少し整えるだけで、日々のコンディションが変わる可能性があります。" },
+  { min: 50, max: 69,  charState: "normal",   title: "ゆらぎ注意タイプ",             description: "複数のカテゴリにゆらぎが出ている傾向があります。頑張っているのに変化を感じにくい場合、内側のコンディションが関係しているかもしれません。" },
+  { min: 30, max: 49,  charState: "tired",    title: "内側見直しタイプ",             description: "体の重さ、食欲の乱れ、睡眠、肌など複数の項目に不調のサインが出ている可能性があります。まず自分の内側を知ることが大切かもしれません。" },
+  { min: 0,  max: 29,  charState: "exhausted",title: "おつかれ内側ケアタイプ",        description: "かなり多くの項目にゆらぎが出ている傾向があります。無理な制限や運動を続ける前に、内側のコンディションを確認することをおすすめします。" },
+];
+
+// ── トータルタイプ ────────────────────────────────────────────────────────────
+const TOTAL_TYPES = [
+  { id: "gut_rhythm",   name: "腸内リズムゆらぎ型",       category: "gut",         emoji: "🌀" },
+  { id: "metabolism",   name: "代謝ブレーキ型",           category: "diet",        emoji: "🔥" },
+  { id: "beauty_cond",  name: "美容コンディション乱れ型",  category: "beauty",      emoji: "✨" },
+  { id: "sleep_stress", name: "睡眠ストレス影響型",        category: "sleep",       emoji: "🌙" },
+  { id: "circulation",  name: "巡り・むくみ型",           category: "circulation", emoji: "💧" },
+  { id: "appetite",     name: "食欲コントロールゆらぎ型",  category: "appetite",    emoji: "🍬" },
+  { id: "health_cond",  name: "健康コンディション見直し型", category: "health",      emoji: "🛡️" },
+  { id: "personal_opt", name: "パーソナル最適化型",        category: "personal",    emoji: "🔍" },
+];
+
+// ── PMASタイプ (4種類) ────────────────────────────────────────────────────────
+const PMAS_TYPES = ["バランス型", "アクティブ型", "ポテンシャル型", "スリープ型"];
+
+// ── ちょーちゃんパーツ ────────────────────────────────────────────────────────
+const CHOCHAN_PARTS = {
+  bodyColor: [C.mint, C.blue, C.lav, C.coral, "#FFD166", "#94A3B8", "#F472B6", "#34D399", "#60A5FA", "#A78BFA"],
+  eyeType:   ["happy", "cool", "sleepy", "sparkle", "wink", "determined"],
+  mouthType: ["smile", "grin", "neutral", "pout", "open"],
+  accessory: ["none", "crown", "glasses", "bow", "star", "leaf", "drop", "flame", "moon", "heart"],
+  aura:      ["none", "mint", "blue", "gold", "pink", "rainbow"],
+};
+
+const RARITY = [
+  { id: "N",   name: "ノーマル",     color: "#94A3B8", threshold: 0  },
+  { id: "R",   name: "レア",         color: C.blue,    threshold: 50 },
+  { id: "SR",  name: "スーパーレア", color: C.lav,     threshold: 65 },
+  { id: "SSR", name: "ミラクル",     color: C.coral,   threshold: 78 },
+  { id: "UR",  name: "レジェンド",   color: "#FFD700", threshold: 90 },
 ];
 
 // ── スコア計算 ────────────────────────────────────────────────────────────────
 function calcTotalScore(answers) {
-  // 各問の最大スコアは5点、20問で100点満点
-  return answers.reduce((sum, s) => sum + (s ?? 0), 0);
+  const raw = answers.reduce((sum, s) => sum + (s ?? 0), 0);
+  return Math.round((raw / 120) * 100);
 }
-
 function calcCategoryScores(answers) {
   return CATEGORIES.map((cat) => {
     const scores = cat.questionIds.map((qid) => answers[qid - 1] ?? 0);
@@ -278,144 +366,256 @@ function calcCategoryScores(answers) {
     return { ...cat, score: Math.round((raw / max) * 100) };
   });
 }
-
 function getLowestCategory(catScores) {
   return catScores.reduce((min, c) => (c.score < min.score ? c : min), catScores[0]);
 }
-
+function getTotalType(catScores) {
+  const lowestId = [...catScores].sort((a, b) => a.score - b.score)[0].id;
+  return TOTAL_TYPES.find(t => t.category === lowestId) ?? TOTAL_TYPES[0];
+}
 function getScoreType(total) {
-  return SCORE_TYPES.find((t) => total >= t.min && total <= t.max) ?? SCORE_TYPES[3];
+  return SCORE_TYPES.find(t => total >= t.min && total <= t.max) ?? SCORE_TYPES[4];
+}
+function getRarity(score) {
+  return [...RARITY].reverse().find(r => score >= r.threshold) ?? RARITY[0];
+}
+function generateChochan(totalScore, totalType, lowestCat) {
+  const seed = totalScore * 31 + TOTAL_TYPES.indexOf(totalType) * 17 + CATEGORIES.indexOf(lowestCat) * 7;
+  const pick = (arr, n) => arr[Math.abs(n) % arr.length];
+  const s = (x) => Math.abs(Math.floor(Math.sin(seed * x + x) * 9999));
+  const parts = {
+    bodyColor: pick(CHOCHAN_PARTS.bodyColor,  s(2)),
+    eyeType:   pick(CHOCHAN_PARTS.eyeType,    s(3)),
+    mouthType: pick(CHOCHAN_PARTS.mouthType,  s(4)),
+    accessory: pick(CHOCHAN_PARTS.accessory,  s(5)),
+    aura:      pick(CHOCHAN_PARTS.aura,       s(6)),
+  };
+  const names = ["ぷにお", "もちこ", "ふわり", "きらら", "まろん", "ぽんた", "にこる", "そらお", "みるく", "ほのか"];
+  const name = pick(names, s(8)) + "ちゃん";
+  const attrs = { gut:"水", diet:"火", beauty:"光", circulation:"風", sleep:"月", health:"星", appetite:"土", personal:"宇宙" };
+  const personalities = ["のんびりや", "がんばりや", "ふしぎちゃん", "つよがり", "やさしい子", "おちゃめ", "まじめ", "のびのび"];
+  const comments = ["いっしょに内側から元気になろうね！", "ぼくのこと、もっと知って！", "腸内環境が気になるなら、一緒に確認しよう。", "内側を整えたら、もっとハッピーになれるかも！", "データをもとに、自分だけの答えを見つけよう！"];
+  return {
+    parts, name,
+    rarity: getRarity(totalScore),
+    attr: attrs[lowestCat.id] ?? "水",
+    personality: pick(personalities, s(9)),
+    comment: pick(comments, s(10)),
+  };
 }
 
-// ── ちょーちゃん SVG ──────────────────────────────────────────────────────────
-function ChoChan({ state }) {
-  const cfg = {
-    kirara:  { body: "#FFB7D5", face: "#FF8EB5", eye: "#FF5C98", cheek: "#FFD6E8", sparkles: true,  tilt: 0,   eyes: "happy",  mouth: "big-smile" },
-    yuragi:  { body: "#C9B8F0", face: "#B09EE8", eye: "#8A74D6", cheek: "#DDD4F8", sparkles: false, tilt: -5,  eyes: "sleepy", mouth: "small-smile" },
-    otsukare:{ body: "#F0C4A8", face: "#E8A882", eye: "#C47A52", cheek: "#F5D8C4", sparkles: false, tilt: -10, eyes: "sad",    mouth: "frown" },
-    guttari: { body: "#B8D4C0", face: "#94BEA0", eye: "#6A9E78", cheek: "#CBE8D4", sparkles: false, tilt: -20, eyes: "dizzy",  mouth: "wavy" },
-  }[state] ?? { body:"#FFB7D5", face:"#FF8EB5", eye:"#FF5C98", cheek:"#FFD6E8", sparkles:true, tilt:0, eyes:"happy", mouth:"big-smile" };
+// ── ちょーちゃん SVG（瞬き・手振り付き） ─────────────────────────────────────
+function ChoChanSVG({ parts, state, size = 160 }) {
+  const [blinkOn, setBlinkOn] = useState(false);
+  const [waveAngle, setWaveAngle] = useState(0);
+  const [waveDir, setWaveDir] = useState(1);
+  const [sparkFrame, setSparkFrame] = useState(0);
+
+  // 瞬き: 3〜5秒ごとにランダムで瞬く
+  useEffect(() => {
+    let timeout;
+    const doBlink = () => {
+      setBlinkOn(true);
+      setTimeout(() => setBlinkOn(false), 150);
+      timeout = setTimeout(doBlink, 3000 + Math.random() * 2000);
+    };
+    timeout = setTimeout(doBlink, 1500 + Math.random() * 2000);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  // 手を振る: 揺れアニメ
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWaveAngle(prev => {
+        const next = prev + waveDir * 12;
+        if (next > 36 || next < -36) setWaveDir(d => -d);
+        return next;
+      });
+    }, 80);
+    return () => clearInterval(interval);
+  }, [waveDir]);
+
+  // キラキラフレーム
+  useEffect(() => {
+    if (state === "great" || state === "good") {
+      const interval = setInterval(() => setSparkFrame(f => (f + 1) % 6), 300);
+      return () => clearInterval(interval);
+    }
+  }, [state]);
+
+  const { bodyColor, eyeType, mouthType, accessory, aura } = parts;
+  const auraColors = { none: "transparent", mint: "#10B98133", blue: "#3B82F633", gold: "#FFD16633", pink: "#F472B633", rainbow: "#A78BFA33" };
+  const auraColor = auraColors[aura] ?? "transparent";
+
+  // ボディアニメのクラス
+  const bodyAnim = state === "great" ? "cc-bounce" : state === "good" ? "cc-float" : state === "normal" ? "cc-sway" : "cc-tired";
+
+  // キラキラの位置
+  const sparkPositions = [[20,55],[170,50],[25,130],[175,125],[100,20],[150,140]];
+  const showSparks = state === "great" || state === "good";
 
   return (
-    <svg viewBox="0 0 200 220" width="150" height="165" style={{ filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.10))" }}>
-      <ellipse cx="100" cy="204" rx="65" ry="11" fill={cfg.body} opacity="0.3" />
-      {cfg.sparkles && <>
-        <text x="24" y="58" fontSize="16" textAnchor="middle">⭐</text>
-        <text x="176" y="52" fontSize="14" textAnchor="middle">✨</text>
-        <text x="158" y="108" fontSize="12" textAnchor="middle">💫</text>
-        <text x="40" y="112" fontSize="12" textAnchor="middle">✨</text>
-      </>}
-      <g transform={`rotate(${cfg.tilt}, 100, 110)`}>
-        <ellipse cx="100" cy="148" rx="56" ry="50" fill={cfg.body} />
-        <ellipse cx="46" cy="138" rx="15" ry="9" fill={cfg.body} transform="rotate(-30,46,138)" />
-        <ellipse cx="154" cy="138" rx="15" ry="9" fill={cfg.body} transform="rotate(30,154,138)" />
-        <ellipse cx="78" cy="190" rx="13" ry="9" fill={cfg.body} transform="rotate(-10,78,190)" />
-        <ellipse cx="122" cy="190" rx="13" ry="9" fill={cfg.body} transform="rotate(10,122,190)" />
-        <circle cx="100" cy="105" r="46" fill={cfg.face} />
-        <ellipse cx="74" cy="115" rx="11" ry="7" fill={cfg.cheek} opacity="0.7" />
-        <ellipse cx="126" cy="115" rx="11" ry="7" fill={cfg.cheek} opacity="0.7" />
-        {cfg.eyes === "happy" && <>
-          <path d="M82 100 Q86 93 90 100" stroke={cfg.eye} strokeWidth="3" fill="none" strokeLinecap="round" />
-          <path d="M110 100 Q114 93 118 100" stroke={cfg.eye} strokeWidth="3" fill="none" strokeLinecap="round" />
-        </>}
-        {cfg.eyes === "sleepy" && <>
-          <ellipse cx="86" cy="100" rx="7" ry="5" fill={cfg.eye} />
-          <ellipse cx="114" cy="100" rx="7" ry="5" fill={cfg.eye} />
-          <line x1="79" y1="98" x2="93" y2="98" stroke={cfg.face} strokeWidth="3" />
-          <line x1="107" y1="98" x2="121" y2="98" stroke={cfg.face} strokeWidth="3" />
-        </>}
-        {cfg.eyes === "sad" && <>
-          <ellipse cx="86" cy="102" rx="6" ry="7" fill={cfg.eye} />
-          <ellipse cx="114" cy="102" rx="6" ry="7" fill={cfg.eye} />
-          <path d="M82 96 Q86 92 90 96" stroke={cfg.face} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-          <path d="M110 96 Q114 92 118 96" stroke={cfg.face} strokeWidth="2.5" fill="none" strokeLinecap="round" />
-          <ellipse cx="82" cy="112" rx="3" ry="4" fill="#74C0FC" opacity="0.7" />
-        </>}
-        {cfg.eyes === "dizzy" && <>
-          <text x="80" y="107" fontSize="16" textAnchor="middle" fill={cfg.eye}>×</text>
-          <text x="120" y="107" fontSize="16" textAnchor="middle" fill={cfg.eye}>×</text>
-        </>}
-        {cfg.mouth === "big-smile"   && <path d="M82 118 Q100 132 118 118" stroke={cfg.eye} strokeWidth="3" fill="none" strokeLinecap="round" />}
-        {cfg.mouth === "small-smile" && <path d="M88 118 Q100 125 112 118" stroke={cfg.eye} strokeWidth="2.5" fill="none" strokeLinecap="round" />}
-        {cfg.mouth === "frown"       && <path d="M85 122 Q100 115 115 122" stroke={cfg.eye} strokeWidth="2.5" fill="none" strokeLinecap="round" />}
-        {cfg.mouth === "wavy"        && <path d="M82 120 Q88 115 95 120 Q102 126 109 120 Q116 115 122 120" stroke={cfg.eye} strokeWidth="2.5" fill="none" strokeLinecap="round" />}
-        <ellipse cx="118" cy="88" rx="7" ry="5" fill="white" opacity="0.35" transform="rotate(-30,118,88)" />
-      </g>
-    </svg>
-  );
-}
+    <div style={{ position: "relative", display: "inline-block" }}>
+      {aura !== "none" && (
+        <div style={{
+          position: "absolute", inset: -14, borderRadius: "50%",
+          background: auraColor, filter: "blur(14px)",
+          animation: "aura-pulse 2s ease-in-out infinite",
+        }} />
+      )}
 
-// ── 汎用パーツ ────────────────────────────────────────────────────────────────
-function Disclaimer() {
-  return (
-    <p style={{ fontSize: 11, color: "#A08090", textAlign: "center", lineHeight: 1.65, marginTop: 28, padding: "0 8px" }}>
-      このセルフチェックは医療行為・医学的診断ではありません。<br />
-      結果は生活習慣や体感をもとにした参考情報です。
-    </p>
-  );
-}
+      <svg viewBox="0 0 200 230" width={size} height={size * 1.15}
+        style={{ position: "relative", zIndex: 1, filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.13))", overflow: "visible" }}>
 
-function GaugeBar({ score, color }) {
-  return (
-    <div style={{ background: "#F5E6EE", borderRadius: 99, height: 10, overflow: "hidden", flex: 1 }}>
-      <div style={{ width: `${score}%`, height: "100%", borderRadius: 99, background: color, transition: "width 1s cubic-bezier(.34,1.2,.64,1)" }} />
+        {/* キラキラ */}
+        {showSparks && sparkPositions.map((pos, i) => (
+          (sparkFrame === i || sparkFrame === (i + 3) % 6) && (
+            <text key={i} x={pos[0]} y={pos[1]} fontSize="12" textAnchor="middle" opacity="0.8">✨</text>
+          )
+        ))}
+
+        {/* 右手（振る） */}
+        <g transform={`rotate(${waveAngle}, 162, 138)`}>
+          <ellipse cx="162" cy="138" rx="17" ry="10" fill={bodyColor} />
+          <text x="162" y="132" fontSize="13" textAnchor="middle">👋</text>
+        </g>
+
+        {/* 左手（静止） */}
+        <ellipse cx="38" cy="138" rx="17" ry="10" fill={bodyColor} transform="rotate(-25,38,138)" />
+
+        {/* ボディ（全体が揺れる） */}
+        <g className={bodyAnim}>
+          {/* 足 */}
+          <ellipse cx="78" cy="193" rx="15" ry="9" fill={bodyColor} transform="rotate(-8,78,193)" />
+          <ellipse cx="122" cy="193" rx="15" ry="9" fill={bodyColor} transform="rotate(8,122,193)" />
+          {/* 影 */}
+          <ellipse cx="100" cy="208" rx="55" ry="8" fill={bodyColor} opacity="0.2" />
+          {/* 体 */}
+          <ellipse cx="100" cy="148" rx="58" ry="52" fill={bodyColor} />
+          {/* 顔 */}
+          <circle cx="100" cy="105" r="48" fill={bodyColor} />
+          {/* 顔ハイライト */}
+          <ellipse cx="82" cy="88" rx="12" ry="8" fill="white" opacity="0.22" transform="rotate(-20,82,88)" />
+          {/* ほっぺ */}
+          <ellipse cx="70" cy="118" rx="13" ry="9" fill="white" opacity="0.28" />
+          <ellipse cx="130" cy="118" rx="13" ry="9" fill="white" opacity="0.28" />
+
+          {/* 目（瞬き考慮） */}
+          {blinkOn ? (
+            <>
+              <line x1="78" y1="101" x2="92" y2="101" stroke="white" strokeWidth="3.5" strokeLinecap="round" />
+              <line x1="108" y1="101" x2="122" y2="101" stroke="white" strokeWidth="3.5" strokeLinecap="round" />
+            </>
+          ) : (
+            <>
+              {eyeType === "happy" && <>
+                <path d="M79 101 Q86 93 93 101" stroke="white" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+                <path d="M107 101 Q114 93 121 101" stroke="white" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+              </>}
+              {eyeType === "cool" && <>
+                <rect x="77" y="97" width="16" height="6" rx="3" fill="white" />
+                <rect x="107" y="97" width="16" height="6" rx="3" fill="white" />
+              </>}
+              {eyeType === "sleepy" && <>
+                <ellipse cx="86" cy="101" rx="8" ry="5.5" fill="white" />
+                <line x1="78" y1="99" x2="94" y2="99" stroke={bodyColor} strokeWidth="3" />
+                <ellipse cx="114" cy="101" rx="8" ry="5.5" fill="white" />
+                <line x1="106" y1="99" x2="122" y2="99" stroke={bodyColor} strokeWidth="3" />
+              </>}
+              {eyeType === "sparkle" && <>
+                <circle cx="86" cy="101" r="8" fill="white" />
+                <circle cx="114" cy="101" r="8" fill="white" />
+                <text x="83" y="105" fontSize="10" textAnchor="middle" fill={bodyColor}>★</text>
+                <text x="111" y="105" fontSize="10" textAnchor="middle" fill={bodyColor}>★</text>
+              </>}
+              {eyeType === "wink" && <>
+                <path d="M79 101 Q86 93 93 101" stroke="white" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+                <line x1="108" y1="99" x2="121" y2="99" stroke="white" strokeWidth="3.5" strokeLinecap="round" />
+              </>}
+              {eyeType === "determined" && <>
+                <ellipse cx="86" cy="101" rx="8" ry="7" fill="white" />
+                <ellipse cx="114" cy="101" rx="8" ry="7" fill="white" />
+                <line x1="80" y1="95" x2="92" y2="98" stroke="white" strokeWidth="2.5" />
+                <line x1="108" y1="98" x2="120" y2="95" stroke="white" strokeWidth="2.5" />
+              </>}
+            </>
+          )}
+
+          {/* 口 */}
+          {mouthType === "smile"   && <path d="M85 118 Q100 129 115 118" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" />}
+          {mouthType === "grin"    && <path d="M82 116 Q100 131 118 116" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" />}
+          {mouthType === "neutral" && <line x1="88" y1="120" x2="112" y2="120" stroke="white" strokeWidth="3" strokeLinecap="round" />}
+          {mouthType === "pout"    && <path d="M88 122 Q100 115 112 122" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" />}
+          {mouthType === "open"    && <ellipse cx="100" cy="120" rx="10" ry="7" fill="white" opacity="0.8" />}
+
+          {/* アクセサリー */}
+          {accessory === "crown"   && <><polygon points="72,67 80,49 90,61 100,43 110,61 120,49 128,67" fill="#FFD700" /><rect x="72" y="64" width="56" height="8" rx="3" fill="#FFB700" /></>}
+          {accessory === "glasses" && <><rect x="72" y="95" width="22" height="14" rx="7" fill="none" stroke="white" strokeWidth="2.5" /><rect x="106" y="95" width="22" height="14" rx="7" fill="none" stroke="white" strokeWidth="2.5" /><line x1="94" y1="102" x2="106" y2="102" stroke="white" strokeWidth="2" /></>}
+          {accessory === "bow"     && <><path d="M75,59 Q85,49 95,59 Q85,69 75,59Z" fill="#F472B6" /><path d="M105,59 Q115,49 125,59 Q115,69 105,59Z" fill="#F472B6" /><circle cx="100" cy="59" r="5" fill="#EC4899" /></>}
+          {accessory === "star"    && <text x="100" y="56" fontSize="22" textAnchor="middle">⭐</text>}
+          {accessory === "leaf"    && <text x="100" y="56" fontSize="22" textAnchor="middle">🌿</text>}
+          {accessory === "drop"    && <text x="100" y="56" fontSize="22" textAnchor="middle">💧</text>}
+          {accessory === "flame"   && <text x="100" y="56" fontSize="22" textAnchor="middle">🔥</text>}
+          {accessory === "moon"    && <text x="100" y="56" fontSize="22" textAnchor="middle">🌙</text>}
+          {accessory === "heart"   && <text x="100" y="56" fontSize="22" textAnchor="middle">💚</text>}
+        </g>
+      </svg>
+
+      <style>{`
+        .cc-bounce { animation: cc-bounce 1s ease-in-out infinite; transform-origin: center bottom; }
+        .cc-float  { animation: cc-float 2.2s ease-in-out infinite; transform-origin: center; }
+        .cc-sway   { animation: cc-sway 2.8s ease-in-out infinite; transform-origin: center bottom; }
+        .cc-tired  { animation: cc-tired 2.2s ease-in-out infinite; transform-origin: center bottom; }
+        @keyframes cc-bounce { 0%,100%{transform:translateY(0) scaleY(1)} 45%{transform:translateY(-16px) scaleY(1.05)} 55%{transform:translateY(-16px) scaleY(1.05)} 90%{transform:translateY(2px) scaleY(0.96)} }
+        @keyframes cc-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+        @keyframes cc-sway   { 0%,100%{transform:rotate(0deg)} 30%{transform:rotate(4deg)} 70%{transform:rotate(-4deg)} }
+        @keyframes cc-tired  { 0%,100%{transform:rotate(0deg) translateY(0)} 40%{transform:rotate(-7deg) translateY(4px)} 80%{transform:rotate(3deg) translateY(2px)} }
+        @keyframes aura-pulse { 0%,100%{opacity:0.5;transform:scale(1)} 50%{opacity:1;transform:scale(1.12)} }
+      `}</style>
     </div>
   );
 }
 
-function PmasReportCard() {
-  const items = [
-    { label: "腸内バランス",      color: "#FF6B9D", val: 72 },
-    { label: "美容コンディション", color: "#C084FC", val: 65 },
-    { label: "食欲バランス",      color: "#FF9F43", val: 58 },
-    { label: "巡り・むくみ",      color: "#74C0FC", val: 80 },
-    { label: "睡眠ストレス",      color: "#34D399", val: 70 },
-    { label: "代謝サポート",      color: "#FFD166", val: 62 },
-  ];
+// ── 共通パーツ ────────────────────────────────────────────────────────────────
+function Disclaimer() {
   return (
-    <div style={{ background: "white", borderRadius: 20, padding: "18px 20px", border: "2px dashed #FFCCE0", margin: "16px 0" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-        <span style={{ fontSize: 20 }}>📋</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: "#2D2235" }}>PMASレポートイメージ</span>
-        <span style={{ fontSize: 10, background: "#FFF0F6", color: "#FF6B9D", borderRadius: 99, padding: "2px 8px", fontWeight: 700, marginLeft: "auto" }}>サンプル</span>
-      </div>
-      {items.map((item) => (
-        <div key={item.label} style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <span style={{ fontSize: 12, color: "#5A4060", fontWeight: 600 }}>{item.label}</span>
-            <span style={{ fontSize: 12, fontWeight: 800, color: item.color }}>{item.val}</span>
-          </div>
-          <GaugeBar score={item.val} color={item.color} />
-        </div>
-      ))}
-      <p style={{ fontSize: 10.5, color: "#A08090", textAlign: "center", marginTop: 12 }}>
-        実際のPMASでは、より詳しい情報を確認できます
-      </p>
+    <p style={{ fontSize: 11, color: C.muted, textAlign: "center", lineHeight: 1.65, marginTop: 24, padding: "14px 8px 0", borderTop: `1px solid ${C.border}` }}>
+      このアプリは医療行為・医学的診断ではありません。結果は生活習慣や体感をもとにした参考情報です。気になる症状が続く場合は医療機関にご相談ください。
+    </p>
+  );
+}
+function GaugeBar({ score, color }) {
+  return (
+    <div style={{ background: C.border, borderRadius: 99, height: 10, overflow: "hidden", flex: 1 }}>
+      <div style={{ width: `${score}%`, height: "100%", borderRadius: 99, background: color, transition: "width 1.2s cubic-bezier(.34,1.2,.64,1)" }} />
     </div>
   );
 }
 
 // ── メインアプリ ──────────────────────────────────────────────────────────────
-export default function BeautyGutScore() {
-  const [screen, setScreen] = useState("top");
-  const [showMsg, setShowMsg] = useState(false);
+export default function BeautyGutQuest() {
+  const [screen, setScreen]   = useState("top");
   const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState(Array(20).fill(null));
+  const [answers, setAnswers] = useState(Array(24).fill(null));
   const [selected, setSelected] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const [animIn, setAnimIn] = useState(true);
+  const [copied, setCopied]   = useState(false);
+  const [animIn, setAnimIn]   = useState(true);
+  const [showPmasMsg, setShowPmasMsg] = useState(false);
+  const [pmasTab, setPmasTab] = useState(0);
+  const [pmasInput, setPmasInput] = useState({ score: "", type: "", bacteria: "", memo: "" });
+  const [pmasSaved, setPmasSaved] = useState(false);
 
-  const totalScore   = answers.every(a => a !== null) ? calcTotalScore(answers) : 0;
-  const catScores    = calcCategoryScores(answers.map(a => a ?? 0));
-  const lowestCat    = getLowestCategory(catScores);
-  const scoreType    = getScoreType(totalScore);
+  const totalScore = answers.every(a => a !== null) ? calcTotalScore(answers) : 0;
+  const catScores  = calcCategoryScores(answers.map(a => a ?? 0));
+  const lowestCat  = getLowestCategory(catScores);
+  const totalType  = getTotalType(catScores);
+  const scoreType  = getScoreType(totalScore);
+  const chochan    = generateChochan(totalScore, totalType, lowestCat);
 
   const go = (to) => {
     setAnimIn(false);
-    setTimeout(() => { setScreen(to); setAnimIn(true); }, 220);
+    setTimeout(() => { setScreen(to); setAnimIn(true); window.scrollTo(0,0); }, 200);
   };
-
-  const handleSelect = (score) => setSelected(score);
 
   const handleNext = () => {
     if (selected === null) return;
@@ -423,89 +623,98 @@ export default function BeautyGutScore() {
     next[currentQ] = selected;
     setAnswers(next);
     setSelected(null);
-    if (currentQ < QUESTIONS.length - 1) {
-      setCurrentQ(currentQ + 1);
-    } else {
-      go("result");
-    }
+    if (currentQ < QUESTIONS.length - 1) setCurrentQ(currentQ + 1);
+    else go("result");
   };
 
   const handleBack = () => {
     if (currentQ === 0) { go("top"); return; }
-    const prev = currentQ - 1;
-    setSelected(answers[prev]);
-    setCurrentQ(prev);
+    setSelected(answers[currentQ - 1]);
+    setCurrentQ(currentQ - 1);
   };
 
   const handleReset = () => {
-    setAnswers(Array(20).fill(null));
+    setAnswers(Array(24).fill(null));
     setCurrentQ(0);
     setSelected(null);
+    setPmasSaved(false);
+    setPmasInput({ score: "", type: "", bacteria: "", memo: "" });
     go("top");
   };
 
   const handleCopy = () => {
-    const text = `Beauty Gut Score\n総合スコア: ${totalScore}/100点\nタイプ: ${scoreType.title}\n#BeautyGutScore #腸活 #美腸`;
+    const text = `Beauty Gut Quest\n総合スコア：${totalScore}点\nタイプ：${totalType.name}\nちょーちゃん：${chochan.name}\nレア度：${chochan.rarity.name}\n最優先見直しポイント：${lowestCat.name}\n#BeautyGutQuest #腸活 #PMAS #ちょーちゃん`;
     navigator.clipboard.writeText(text).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ── 共通スタイル ──────────────────────────────────────────────────────────
+  // 共通スタイル
   const wrap = {
     fontFamily: "'Hiragino Maru Gothic ProN','Noto Sans JP',sans-serif",
     minHeight: "100vh",
-    background: "linear-gradient(160deg,#FFF5F9 0%,#FFF9F5 50%,#F5F0FF 100%)",
+    background: `linear-gradient(160deg,${C.offwhite} 0%,${C.blueL} 50%,${C.lavL} 100%)`,
     display: "flex", flexDirection: "column", alignItems: "center",
-    padding: "0 0 48px", position: "relative", overflowX: "hidden",
+    padding: "0 0 56px", overflowX: "hidden",
   };
   const content = {
     width: "100%", maxWidth: 440, padding: "0 16px",
     opacity: animIn ? 1 : 0,
     transform: animIn ? "translateY(0)" : "translateY(14px)",
-    transition: "opacity 0.22s ease, transform 0.22s ease",
+    transition: "opacity 0.2s ease, transform 0.2s ease",
   };
   const card = {
-    background: "white", borderRadius: 24, padding: "20px 18px",
-    boxShadow: "0 4px 28px rgba(255,107,157,0.09)",
-    border: "1.5px solid #FFE0EE", width: "100%",
+    background: C.white, borderRadius: 20, padding: "18px 16px",
+    boxShadow: "0 2px 20px rgba(59,130,246,0.08)",
+    border: `1.5px solid ${C.border}`, width: "100%",
   };
   const btnPrimary = {
-    width: "100%", padding: "15px 0", borderRadius: 99, border: "none",
-    background: "linear-gradient(135deg,#FF6B9D 0%,#FF9F43 100%)",
-    color: "white", fontSize: 15, fontWeight: 900, cursor: "pointer",
-    boxShadow: "0 5px 20px rgba(255,107,157,0.38)", letterSpacing: "0.02em",
+    width: "100%", padding: "14px 0", borderRadius: 99, border: "none",
+    background: `linear-gradient(135deg,${C.mint},${C.blue})`,
+    color: C.white, fontSize: 15, fontWeight: 900, cursor: "pointer",
+    boxShadow: "0 4px 18px rgba(59,130,246,0.28)", letterSpacing: "0.02em", fontFamily: "inherit",
   };
+  const btnSec = {
+    width: "100%", padding: "12px 0", borderRadius: 99,
+    border: `1.5px solid ${C.border}`, background: C.white,
+    color: C.navy, fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit",
+  };
+  const btnBack = {
+    background: C.offwhite, border: "none", borderRadius: 12,
+    padding: "8px 14px", fontSize: 13, color: C.blue,
+    fontWeight: 800, cursor: "pointer", fontFamily: "inherit",
+  };
+
+  const charState = scoreType.charState === "great" ? "great" : scoreType.charState === "good" ? "good" : scoreType.charState === "normal" ? "normal" : "tired";
 
   // ── TOP ────────────────────────────────────────────────────────────────────
   if (screen === "top") return (
     <div style={wrap}>
-      <div style={{ position:"fixed", top:-60, right:-60, width:220, height:220, borderRadius:"50%", background:"rgba(255,107,157,0.07)", pointerEvents:"none" }} />
-      <div style={{ position:"fixed", bottom:-40, left:-40, width:180, height:180, borderRadius:"50%", background:"rgba(192,132,252,0.07)", pointerEvents:"none" }} />
       <div style={content}>
-        <div style={{ textAlign:"center", paddingTop:36 }}>
-          <div style={{ display:"inline-block", background:"linear-gradient(135deg,#FF6B9D,#FF9F43)", borderRadius:99, padding:"5px 18px", fontSize:11, fontWeight:800, color:"white", letterSpacing:"0.1em", marginBottom:18 }}>
-            Beauty Gut Score
+        <div style={{ textAlign: "center", paddingTop: 36 }}>
+          <div style={{ display: "inline-block", background: `linear-gradient(135deg,${C.mint},${C.blue})`, borderRadius: 99, padding: "5px 18px", fontSize: 11, fontWeight: 800, color: C.white, letterSpacing: "0.12em", marginBottom: 20 }}>
+            Beauty Gut Quest
           </div>
-          <div style={{ margin:"0 auto 14px" }}><ChoChan state="kirara" /></div>
-          <h1 style={{ fontSize:20, fontWeight:900, color:"#2D2235", lineHeight:1.45, marginBottom:14 }}>
-            あなたの"痩せやすさ"と<br />"綺麗になりやすさ"は、<br />
-            <span style={{ color:"#FF6B9D" }}>内側で決まっている</span>かも。
+          <div style={{ margin: "0 auto 16px" }}>
+            <ChoChanSVG parts={{ bodyColor: C.mint, eyeType: "sparkle", mouthType: "grin", accessory: "crown", aura: "mint" }} state="great" size={150} />
+          </div>
+          <h1 style={{ fontSize: 20, fontWeight: 900, color: C.dark, lineHeight: 1.5, marginBottom: 14 }}>
+            自分の内側を知って、<br />
+            <span style={{ color: C.mint }}>あなただけの</span><br />
+            "ちょーちゃん"を育てよう。
           </h1>
-          <div style={{ background:"#FFF0F6", borderRadius:16, padding:"14px 16px", marginBottom:22, border:"1.5px solid #FFE0EE" }}>
-            <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>
-              食事制限しても、運動しても、なぜか変わらない。<br />
-              それ、意思の弱さではなく<br />
-              <strong style={{ color:"#FF6B9D" }}>"腸内コンディション"</strong>のサインかもしれません。
+          <div style={{ background: C.blueL, borderRadius: 16, padding: "14px 16px", marginBottom: 22, border: `1.5px solid ${C.blueB}` }}>
+            <p style={{ fontSize: 13, color: C.navy, lineHeight: 1.8, margin: 0 }}>
+              腸内環境は、肌・睡眠・代謝・気分・免疫など<br />
+              体全体のコンディションに関わっている可能性があります。<br />
+              まず、自分の今の状態を知ることから始めましょう。
             </p>
           </div>
-          <button
-            onClick={() => { setCurrentQ(0); setAnswers(Array(20).fill(null)); setSelected(null); go("quiz"); }}
-            style={{ ...btnPrimary, marginBottom:10, fontSize:16 }}
-          >
-            ビューティー腸内スコアを測る ✨
+          <button onClick={() => { setCurrentQ(0); setAnswers(Array(24).fill(null)); setSelected(null); go("quiz"); }}
+            style={{ ...btnPrimary, fontSize: 16, marginBottom: 10 }}>
+            腸内コンディションをチェック ✨
           </button>
-          <p style={{ fontSize:11, color:"#A08090" }}>3分でできるセルフチェック。医学的診断ではありません。</p>
+          <p style={{ fontSize: 11, color: C.muted }}>24問・約3分。医学的診断ではありません。</p>
         </div>
       </div>
     </div>
@@ -515,83 +724,52 @@ export default function BeautyGutScore() {
   if (screen === "quiz") {
     const q = QUESTIONS[currentQ];
     const progress = (currentQ / QUESTIONS.length) * 100;
-
-    // 選択肢ごとにアクセントカラーを変える（上から良い順）
-    const optionColors = ["#FF6B9D", "#C084FC", "#FF9F43", "#94A3B8"];
-
+    const optColors = [C.mint, C.blue, C.lav, C.coral];
     return (
       <div style={wrap}>
         <div style={content}>
-          <div style={{ paddingTop:20 }}>
-            {/* ヘッダー */}
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-              <button onClick={handleBack} style={{ background:"rgba(255,107,157,0.1)", border:"none", borderRadius:12, padding:"8px 14px", fontSize:13, color:"#FF6B9D", fontWeight:800, cursor:"pointer" }}>
-                ← もどる
-              </button>
-              <span style={{ fontSize:13, fontWeight:700, color:"#A08090" }}>{currentQ + 1} / {QUESTIONS.length}</span>
+          <div style={{ paddingTop: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <button onClick={handleBack} style={btnBack}>← もどる</button>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>{currentQ + 1} / {QUESTIONS.length}</span>
             </div>
-
-            {/* プログレスバー */}
-            <div style={{ background:"#F5E6EE", borderRadius:99, height:8, marginBottom:22, overflow:"hidden" }}>
-              <div style={{ width:`${progress}%`, height:"100%", background:"linear-gradient(90deg,#FF6B9D,#FF9F43)", borderRadius:99, transition:"width 0.4s ease" }} />
+            <div style={{ background: C.border, borderRadius: 99, height: 6, marginBottom: 20, overflow: "hidden" }}>
+              <div style={{ width: `${progress}%`, height: "100%", background: `linear-gradient(90deg,${C.mint},${C.blue})`, borderRadius: 99, transition: "width 0.4s ease" }} />
             </div>
-
-            {/* 質問カード */}
-            <div style={{ ...card, marginBottom:16, background:"linear-gradient(135deg,#FFF5F9,#FFF9F5)" }}>
-              <div style={{ fontSize:11, color:"#FF6B9D", fontWeight:800, letterSpacing:"0.12em", marginBottom:10 }}>Q{currentQ + 1}</div>
-              <p style={{ fontSize:17, fontWeight:800, color:"#2D2235", lineHeight:1.55, margin:0 }}>{q.text}</p>
+            <div style={{ ...card, marginBottom: 16, background: C.blueL, border: `1.5px solid ${C.blueB}` }}>
+              <div style={{ fontSize: 10, color: C.blue, fontWeight: 800, letterSpacing: "0.14em", marginBottom: 8 }}>Q{currentQ + 1}</div>
+              <p style={{ fontSize: 17, fontWeight: 800, color: C.dark, lineHeight: 1.55, margin: 0 }}>{q.text}</p>
             </div>
-
-            {/* 選択肢 — 各質問専用ラベル */}
-            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:22 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
               {q.options.map((opt, i) => {
-                const isSelected = selected === opt.score;
-                const accentColor = optionColors[i];
+                const isSel = selected === opt.score;
+                const ac = optColors[i];
                 return (
-                  <button
-                    key={i}
-                    onClick={() => handleSelect(opt.score)}
-                    style={{
-                      padding:"15px 18px", borderRadius:18, border:"none", cursor:"pointer",
-                      background: isSelected ? accentColor : "white",
-                      color: isSelected ? "white" : "#2D2235",
-                      fontSize:14, fontWeight: isSelected ? 800 : 600,
-                      boxShadow: isSelected
-                        ? `0 5px 18px ${accentColor}55`
-                        : "0 2px 8px rgba(0,0,0,0.06)",
-                      border: isSelected ? "none" : "1.5px solid #FFE0EE",
-                      textAlign:"left",
-                      transition:"all 0.18s",
-                      transform: isSelected ? "scale(1.025)" : "scale(1)",
-                      display:"flex", alignItems:"center", gap:10,
-                    }}
-                  >
-                    <span style={{
-                      width:26, height:26, borderRadius:"50%", flexShrink:0,
-                      background: isSelected ? "rgba(255,255,255,0.25)" : `${accentColor}18`,
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      fontSize:13, fontWeight:900,
-                      color: isSelected ? "white" : accentColor,
-                    }}>
-                      {isSelected ? "✓" : ["A","B","C","D"][i]}
+                  <button key={i} onClick={() => setSelected(opt.score)} style={{
+                    padding: "14px 16px", borderRadius: 16, border: "none", cursor: "pointer",
+                    background: isSel ? ac : C.white, color: isSel ? C.white : C.dark,
+                    fontSize: 14, fontWeight: isSel ? 800 : 600,
+                    boxShadow: isSel ? `0 4px 16px ${ac}55` : "0 1px 6px rgba(0,0,0,0.06)",
+                    border: isSel ? "none" : `1.5px solid ${C.border}`,
+                    textAlign: "left", transition: "all 0.15s",
+                    transform: isSel ? "scale(1.02)" : "scale(1)",
+                    display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit",
+                  }}>
+                    <span style={{ width: 26, height: 26, borderRadius: "50%", flexShrink: 0, background: isSel ? "rgba(255,255,255,0.25)" : `${ac}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: isSel ? C.white : ac }}>
+                      {isSel ? "✓" : ["A","B","C","D"][i]}
                     </span>
-                    <span style={{ lineHeight:1.5 }}>{opt.label}</span>
+                    <span style={{ lineHeight: 1.5 }}>{opt.label}</span>
                   </button>
                 );
               })}
             </div>
-
-            <button
-              onClick={handleNext}
-              disabled={selected === null}
-              style={{
-                ...btnPrimary,
-                background: selected !== null ? "linear-gradient(135deg,#FF6B9D,#FF9F43)" : "#F5E6EE",
-                color: selected !== null ? "white" : "#C0A0B0",
-                cursor: selected !== null ? "pointer" : "not-allowed",
-                boxShadow: selected !== null ? "0 5px 20px rgba(255,107,157,0.38)" : "none",
-              }}
-            >
+            <button onClick={handleNext} disabled={selected === null} style={{
+              ...btnPrimary,
+              background: selected !== null ? `linear-gradient(135deg,${C.mint},${C.blue})` : C.border,
+              color: selected !== null ? C.white : C.muted,
+              cursor: selected !== null ? "pointer" : "not-allowed",
+              boxShadow: selected !== null ? "0 4px 18px rgba(59,130,246,0.28)" : "none",
+            }}>
               {currentQ < QUESTIONS.length - 1 ? "つぎへ →" : "結果を見る ✨"}
             </button>
           </div>
@@ -604,51 +782,58 @@ export default function BeautyGutScore() {
   if (screen === "result") return (
     <div style={wrap}>
       <div style={content}>
-        <div style={{ paddingTop:24 }}>
-          <div style={{ textAlign:"center", marginBottom:18 }}>
-            <div style={{ fontSize:11, fontWeight:800, color:"#FF6B9D", letterSpacing:"0.14em", marginBottom:6 }}>あなたのスコア</div>
-            <div style={{ fontSize:68, fontWeight:900, color:"#2D2235", lineHeight:1 }}>{totalScore}</div>
-            <div style={{ fontSize:14, color:"#A08090", marginBottom:14 }}>/ 100点</div>
-            <ChoChan state={scoreType.charState} />
-            <div style={{ fontSize:13, fontWeight:800, color:
-              scoreType.charState==="kirara" ? "#FF6B9D" :
-              scoreType.charState==="yuragi" ? "#C084FC" :
-              scoreType.charState==="otsukare" ? "#FF9F43" : "#94A3B8"
-            , marginTop:6 }}>
-              {scoreType.charState==="kirara"  ? "キラキラちょーちゃん ✨" :
-               scoreType.charState==="yuragi"  ? "ゆらぎちょーちゃん 💤" :
-               scoreType.charState==="otsukare"? "おつかれちょーちゃん 😓" :
-                                                  "ぐったりちょーちゃん 💦"}
+        <div style={{ paddingTop: 24 }}>
+          <div style={{ textAlign: "center", marginBottom: 18 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: C.blue, letterSpacing: "0.14em", marginBottom: 6 }}>総合スコア</div>
+            <div style={{ fontSize: 72, fontWeight: 900, color: C.dark, lineHeight: 1 }}>{totalScore}</div>
+            <div style={{ fontSize: 14, color: C.muted, marginBottom: 10 }}>/ 100点</div>
+            <span style={{ display: "inline-block", background: C.blueL, color: C.blue, borderRadius: 99, padding: "4px 14px", fontSize: 12, fontWeight: 800 }}>{scoreType.title}</span>
+          </div>
+
+          <div style={{ ...card, marginBottom: 14, background: C.lavL, border: `1.5px solid ${C.lavB}`, textAlign: "center" }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: C.lav, letterSpacing: "0.12em", marginBottom: 6 }}>あなたのタイプ</div>
+            <div style={{ fontSize: 28, marginBottom: 4 }}>{totalType.emoji}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.dark }}>{totalType.name}</div>
+          </div>
+
+          <div style={{ ...card, marginBottom: 14, textAlign: "center" }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: C.mint, letterSpacing: "0.12em", marginBottom: 12 }}>あなた専用ちょーちゃん</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <ChoChanSVG parts={chochan.parts} state={charState} size={130} />
             </div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.dark, marginBottom: 8 }}>{chochan.name}</div>
+            <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 10, flexWrap: "wrap" }}>
+              <span style={{ background: chochan.rarity.color + "22", color: chochan.rarity.color, borderRadius: 99, padding: "3px 10px", fontSize: 11, fontWeight: 800 }}>
+                {chochan.rarity.id} {chochan.rarity.name}
+              </span>
+              <span style={{ background: C.mintL, color: C.mint, borderRadius: 99, padding: "3px 10px", fontSize: 11, fontWeight: 800 }}>
+                属性：{chochan.attr}
+              </span>
+              <span style={{ background: C.lavL, color: C.lav, borderRadius: 99, padding: "3px 10px", fontSize: 11, fontWeight: 800 }}>
+                {chochan.personality}
+              </span>
+            </div>
+            <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.65, margin: 0, fontStyle: "italic" }}>「{chochan.comment}」</p>
           </div>
 
-          <div style={{ ...card, marginBottom:14, background:"linear-gradient(135deg,#FFF0F6,#FFF6EC)", border:"2px solid #FFCCE0" }}>
-            <div style={{ fontSize:17, fontWeight:900, color:"#FF6B9D", marginBottom:10 }}>{scoreType.title}</div>
-            <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>{scoreType.description}</p>
-          </div>
-
-          <div style={{ ...card, marginBottom:14 }}>
-            <div style={{ fontSize:13, fontWeight:800, color:"#2D2235", marginBottom:14 }}>カテゴリ別スコア</div>
+          <div style={{ ...card, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.dark, marginBottom: 14 }}>カテゴリ別スコア</div>
             {catScores.map((cat) => (
-              <div key={cat.id} style={{ marginBottom:12 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
-                  <span style={{ fontSize:12.5, color:"#5A4060", fontWeight:600 }}>{cat.emoji} {cat.name}</span>
-                  <span style={{ fontSize:13, fontWeight:800, color: cat.score>=70?"#34D399":cat.score>=50?"#FF9F43":"#FF6B9D" }}>{cat.score}%</span>
+              <div key={cat.id} style={{ marginBottom: 11 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: C.dark, fontWeight: 600 }}>{cat.emoji} {cat.name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: cat.score >= 70 ? C.mint : cat.score >= 50 ? C.coral : "#EF4444" }}>{cat.score}%</span>
                 </div>
-                <GaugeBar score={cat.score} color={cat.score>=70?"#34D399":cat.score>=50?"#FF9F43":"#FF6B9D"} />
+                <GaugeBar score={cat.score} color={cat.score >= 70 ? C.mint : cat.score >= 50 ? C.coral : "#EF4444"} />
               </div>
             ))}
           </div>
 
-          <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:16 }}>
-            <button onClick={() => go("detail")} style={{ ...btnPrimary, background:"linear-gradient(135deg,#FF6B9D,#C084FC)" }}>改善ポイントを見る 🔍</button>
-            <button onClick={() => go("pmas")} style={{ ...btnPrimary, background:"linear-gradient(135deg,#FF9F43,#FFD166)" }}>PMASで詳しく確認する ✨</button>
-            <button onClick={handleCopy} style={{ padding:"13px 0", borderRadius:99, border:"1.5px solid #FFCCE0", background:"white", color:"#FF6B9D", fontSize:14, fontWeight:800, cursor:"pointer", width:"100%" }}>
-              {copied ? "コピーしました ✅" : "結果をコピーする 📋"}
-            </button>
-            <button onClick={handleReset} style={{ padding:"12px 0", borderRadius:99, border:"none", background:"transparent", color:"#A08090", fontSize:13, fontWeight:700, cursor:"pointer", width:"100%" }}>
-              もう一度チェックする
-            </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+            <button onClick={() => go("detail")} style={btnPrimary}>改善ポイントを見る 🔍</button>
+            <button onClick={() => go("pmas")} style={{ ...btnPrimary, background: `linear-gradient(135deg,${C.lav},${C.blue})` }}>PMASで確認する 🔬</button>
+            <button onClick={handleCopy} style={btnSec}>{copied ? "コピーしました ✅" : "結果をコピーする 📋"}</button>
+            <button onClick={handleReset} style={{ ...btnSec, border: "none", color: C.muted, fontSize: 13 }}>もう一度チェックする</button>
           </div>
           <Disclaimer />
         </div>
@@ -660,115 +845,266 @@ export default function BeautyGutScore() {
   if (screen === "detail") return (
     <div style={wrap}>
       <div style={content}>
-        <div style={{ paddingTop:20 }}>
-          <button onClick={() => go("result")} style={{ background:"rgba(255,107,157,0.1)", border:"none", borderRadius:12, padding:"8px 14px", fontSize:13, color:"#FF6B9D", fontWeight:800, cursor:"pointer", marginBottom:18 }}>
-            ← 結果に戻る
-          </button>
-
-          <div style={{ ...card, background:"linear-gradient(135deg,#FFF0F6,#F5F0FF)", border:"2px solid #FFCCE0", marginBottom:14 }}>
-            <div style={{ fontSize:10, fontWeight:800, color:"#FF6B9D", letterSpacing:"0.14em", marginBottom:6 }}>最優先改善ポイント</div>
-            <div style={{ fontSize:28, marginBottom:4 }}>{lowestCat.emoji}</div>
-            <div style={{ fontSize:18, fontWeight:900, color:"#2D2235", marginBottom:10 }}>{lowestCat.name}</div>
-            <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>{lowestCat.lowMessage}</p>
+        <div style={{ paddingTop: 20 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+            <button onClick={() => go("result")} style={btnBack}>← 結果に戻る</button>
+            <button onClick={() => go("pmas")} style={{ ...btnBack, color: C.lav }}>PMASで確認する →</button>
           </div>
-
+          <div style={{ ...card, background: C.blueL, border: `2px solid ${C.blueB}`, marginBottom: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: C.blue, letterSpacing: "0.14em", marginBottom: 6 }}>最優先見直しポイント</div>
+            <div style={{ fontSize: 28, marginBottom: 4 }}>{lowestCat.emoji}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.dark, marginBottom: 10 }}>{lowestCat.name}</div>
+            <p style={{ fontSize: 13, color: C.navy, lineHeight: 1.8, margin: 0 }}>{lowestCat.lowMessage}</p>
+          </div>
           {[
-            { icon:"💡", title:"なぜそこが大事なの？",             text:lowestCat.whyImportant },
-            { icon:"😓", title:"今のダイエットでつまずきやすい理由", text:lowestCat.stumble },
-            { icon:"🌿", title:"日常で意識できること（参考）",       text:lowestCat.tips },
+            { icon: "💡", title: "なぜそこが大事なの？", text: lowestCat.whyImportant },
+            { icon: "😓", title: "つまずきやすい理由",   text: lowestCat.stumble },
+            { icon: "🌿", title: "日常で意識できること（参考）", text: lowestCat.tips },
           ].map((item) => (
-            <div key={item.title} style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                <span style={{ fontSize:20 }}>{item.icon}</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>{item.title}</span>
+            <div key={item.title} style={{ ...card, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 20 }}>{item.icon}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: C.dark }}>{item.title}</span>
               </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>{item.text}</p>
+              <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.8, margin: 0 }}>{item.text}</p>
             </div>
           ))}
-
-          <div style={{ ...card, background:"#FFF0F6", border:"2px solid #FFCCE0", marginBottom:16, textAlign:"center" }}>
-            <div style={{ fontSize:22, marginBottom:8 }}>🔬</div>
-            <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:"0 0 14px" }}>
-              本当の腸内環境の状態は、感覚だけではわかりません。<br />
-              PMASで内側を確認することで、自分に合ったアプローチが見えてくるかもしれません。
+          <div style={{ ...card, background: C.lavL, border: `1.5px solid ${C.lavB}`, marginBottom: 16, textAlign: "center" }}>
+            <div style={{ fontSize: 20, marginBottom: 8 }}>🔬</div>
+            <p style={{ fontSize: 13, color: C.navy, lineHeight: 1.8, margin: "0 0 14px" }}>
+              本当の内側の状態は、感覚だけではわかりません。PMASで腸内環境を確認することで、自分に合ったアプローチが見えてくるかもしれません。
             </p>
-            <button onClick={() => go("pmas")} style={{ ...btnPrimary }}>PMASで確認する ✨</button>
+            <button onClick={() => go("pmas")} style={btnPrimary}>PMASをやる準備を見る 🔬</button>
           </div>
+          <button onClick={() => go("result")} style={{ ...btnSec, border: "none", color: C.muted, fontSize: 13 }}>結果に戻る</button>
           <Disclaimer />
         </div>
       </div>
     </div>
   );
 
-  // ── PMAS ──────────────────────────────────────────────────────────────────
-  if (screen === "pmas") {
-    
-    return (
-      <div style={wrap}>
-        <div style={content}>
-          <div style={{ paddingTop:20 }}>
-            <button onClick={() => go("result")} style={{ background:"rgba(255,107,157,0.1)", border:"none", borderRadius:12, padding:"8px 14px", fontSize:13, color:"#FF6B9D", fontWeight:800, cursor:"pointer", marginBottom:18 }}>
-              ← 結果に戻る
-            </button>
-            <div style={{ textAlign:"center", marginBottom:20 }}>
-              <div style={{ fontSize:11, fontWeight:800, color:"#FF6B9D", letterSpacing:"0.14em", marginBottom:12 }}>PMAS</div>
-              <h2 style={{ fontSize:22, fontWeight:900, color:"#2D2235", lineHeight:1.4, marginBottom:10 }}>PMASをやるには？</h2>
-              <p style={{ fontSize:13, color:"#A08090", lineHeight:1.75 }}>PMASはアムウェイのネットから確認できます。このアプリでは、PMASを始める前に知っておきたいことをまとめています。</p>
+  // ── PMAS ─────────────────────────────────────────────────────────────────
+  if (screen === "pmas") return (
+    <div style={wrap}>
+      <div style={content}>
+        <div style={{ paddingTop: 20 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+            <button onClick={() => go("result")} style={btnBack}>← 結果に戻る</button>
+            <button onClick={() => go("detail")} style={{ ...btnBack, color: C.lav }}>改善ポイント →</button>
+          </div>
+
+          {/* タブ */}
+          <div style={{ display: "flex", background: C.offwhite, borderRadius: 14, padding: 4, gap: 4, marginBottom: 18, border: `1px solid ${C.border}` }}>
+            {["PMASとは？", "PMAS結果入力", "体感ログ"].map((tab, i) => (
+              <button key={i} onClick={() => setPmasTab(i)} style={{
+                flex: 1, padding: "9px 4px", borderRadius: 11, border: "none", cursor: "pointer",
+                background: pmasTab === i ? C.white : "transparent",
+                color: pmasTab === i ? C.blue : C.muted,
+                fontSize: 11, fontWeight: pmasTab === i ? 800 : 600,
+                boxShadow: pmasTab === i ? "0 1px 8px rgba(59,130,246,0.15)" : "none",
+                transition: "all 0.2s", fontFamily: "inherit",
+              }}>{tab}</button>
+            ))}
+          </div>
+
+          {/* タブ1: PMASとは */}
+          {pmasTab === 0 && <>
+            <div style={{ textAlign: "center", marginBottom: 18 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 900, color: C.dark, lineHeight: 1.45, marginBottom: 8 }}>
+                本当の状態は、<br />感覚だけでは<span style={{ color: C.blue }}>わからない。</span>
+              </h2>
+              <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.75 }}>PMASは、腸内環境やマイクロバイオームの状態を確認し、自分に合う可能性のある成分や生活習慣を考えるきっかけになるサービスです。</p>
             </div>
-            <div style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>🔬</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>PMASで確認できること</span>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+              <div style={{ ...card, background: "#F8FAFC", border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, marginBottom: 10 }}>これまで</div>
+                {["なんとなく良さそうなサプリを試す", "流行りのダイエットを真似する", "効果があるかは飲んでみないとわからない", "自分に合っているか判断しづらい"].map((t, i) => (
+                  <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                    <span style={{ color: "#EF4444", fontWeight: 800, flexShrink: 0 }}>✗</span>
+                    <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{t}</span>
+                  </div>
+                ))}
               </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>腸内環境やマイクロバイオームの状態を数値で確認できます。自分の腸内にどんな菌がいて、どんなバランスかを知るきっかけになります。</p>
-            </div>
-            <div style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>📋</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>PMASをやる前に知っておきたいこと</span>
+              <div style={{ ...card, background: C.mintL, border: `1.5px solid ${C.mintB}` }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: C.mint, marginBottom: 10 }}>PMAS後</div>
+                {["自分の腸内環境を確認できる", "マイクロバイオームの状態を知るきっかけになる", "自分に合う可能性のある整え方を考えられる", "感覚だけでなくデータをもとに選べる"].map((t, i) => (
+                  <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                    <span style={{ color: C.mint, fontWeight: 800, flexShrink: 0 }}>✓</span>
+                    <span style={{ fontSize: 11, color: C.navy, lineHeight: 1.5 }}>{t}</span>
+                  </div>
+                ))}
               </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>PMASは医療行為ではなく、腸内環境を知るための参考情報です。生活習慣の見直しや、自分に合ったサポートを考える材料になります。</p>
             </div>
-            <div style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>📊</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>検査後に結果を見る流れ</span>
+
+            {[
+              { emoji: "🔬", title: "PMASで確認できること", body: "腸内環境やマイクロバイオームの状態を数値で確認できます。自分の腸内にどんな菌がいて、どんなバランスかを知るきっかけになります。" },
+              { emoji: "📋", title: "PMASをやる前に知っておきたいこと", body: "PMASは医療行為ではなく、腸内環境を知るための参考情報です。疾患の診断はできません。生活習慣の見直しや自分に合ったサポートを考える材料になります。" },
+              { emoji: "🛒", title: "アムウェイのネットでPMASを確認する", body: "PMASはアムウェイの公式ネットから確認できます。詳しくは紹介者・担当者にご確認ください。" },
+            ].map((item, i) => (
+              <div key={i} style={{ ...card, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 20 }}>{item.emoji}</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: C.dark }}>{item.title}</span>
+                </div>
+                <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.8, margin: 0 }}>{item.body}</p>
               </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>検査キットを使って採取→送付→結果がレポートとして届きます。レポートには腸内バランスや菌の傾向が記載されています。</p>
-            </div>
-            <div style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>🌿</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>結果をもとに生活習慣を見直すイメージ</span>
-              </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>食事・睡眠・ストレスなど、自分の腸内状態に合わせた生活習慣のヒントを得ることができます。感覚だけでなく、データをもとに考えるきっかけになります。</p>
-            </div>
-            <div style={{ ...card, marginBottom:16 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>🛒</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>アムウェイのネットでPMASを確認する</span>
-              </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>PMASはアムウェイの公式ネットから確認できます。詳しくは紹介者・担当者にご確認ください。</p>
-            </div>
-            <button onClick={() => setShowMsg(!showMsg)} style={{ ...btnPrimary, marginBottom:12 }}>
+            ))}
+
+            <button onClick={() => setShowPmasMsg(!showPmasMsg)} style={{ ...btnPrimary, marginBottom: 10 }}>
               PMASをアムウェイのネットで確認する
             </button>
-            {showMsg && (
-              <div style={{ ...card, background:"#FFF0F6", border:"2px solid #FFCCE0", marginBottom:16, textAlign:"center" }}>
-                <div style={{ fontSize:22, marginBottom:8 }}>📢</div>
-                <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>
+            {showPmasMsg && (
+              <div style={{ ...card, background: C.blueL, border: `1.5px solid ${C.blueB}`, marginBottom: 14, textAlign: "center" }}>
+                <div style={{ fontSize: 20, marginBottom: 8 }}>📢</div>
+                <p style={{ fontSize: 13, color: C.navy, lineHeight: 1.8, margin: 0 }}>
                   PMASはアムウェイのネットから確認できます。<br />商品名や購入方法は、紹介者・担当者に確認してください。
                 </p>
               </div>
             )}
-            <button onClick={handleReset} style={{ padding:"12px 0", borderRadius:99, border:"none", background:"transparent", color:"#A08090", fontSize:13, fontWeight:700, cursor:"pointer", width:"100%" }}>
-              もう一度チェックする
-            </button>
-            <Disclaimer />
-          </div>
+            <button onClick={() => setPmasTab(1)} style={{ ...btnSec, marginBottom: 10 }}>PMAS結果を入力する →</button>
+          </>}
+
+          {/* タブ2: PMAS結果入力 */}
+          {pmasTab === 1 && <>
+            <div style={{ ...card, marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.dark, marginBottom: 14 }}>🔬 PMAS結果を入力</div>
+
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>PMASスコア（0〜100）</div>
+                <input type="number" min="0" max="100" value={pmasInput.score}
+                  onChange={e => setPmasInput({...pmasInput, score: e.target.value})}
+                  placeholder="例：78"
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${C.border}`, fontSize: 15, fontFamily: "inherit", outline: "none", background: C.offwhite }} />
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>PMASタイプ</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {PMAS_TYPES.map(t => (
+                    <button key={t} onClick={() => setPmasInput({...pmasInput, type: t})}
+                      style={{
+                        padding: "12px 8px", borderRadius: 14, border: "none", cursor: "pointer",
+                        background: pmasInput.type === t ? C.blue : C.offwhite,
+                        color: pmasInput.type === t ? C.white : C.dark,
+                        fontSize: 13, fontWeight: pmasInput.type === t ? 800 : 600,
+                        boxShadow: pmasInput.type === t ? `0 3px 12px ${C.blue}44` : "none",
+                        border: pmasInput.type === t ? "none" : `1.5px solid ${C.border}`,
+                        transition: "all 0.15s", fontFamily: "inherit",
+                      }}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>主要の菌（複数OK）</div>
+                <input type="text" value={pmasInput.bacteria}
+                  onChange={e => setPmasInput({...pmasInput, bacteria: e.target.value})}
+                  placeholder="例：ビフィズス菌、乳酸菌"
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.offwhite }} />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>メモ（任意）</div>
+                <textarea value={pmasInput.memo}
+                  onChange={e => setPmasInput({...pmasInput, memo: e.target.value})}
+                  placeholder="結果を見て気づいたことなど..."
+                  rows={3}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.offwhite, resize: "vertical" }} />
+              </div>
+
+              <button onClick={() => setPmasSaved(true)} style={btnPrimary}>
+                PMAS結果を保存して、ちょーちゃんを進化させる 🌟
+              </button>
+            </div>
+
+            {pmasSaved && (
+              <div style={{ ...card, background: C.mintL, border: `2px solid ${C.mintB}`, marginBottom: 14, textAlign: "center" }}>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>🎉</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: C.dark, marginBottom: 10 }}>ちょーちゃんが進化しました！</div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                  <ChoChanSVG parts={chochan.parts} state="great" size={110} />
+                </div>
+                {pmasInput.score && <div style={{ fontSize: 13, color: C.navy, marginBottom: 4 }}>PMASスコア：<strong>{pmasInput.score}点</strong></div>}
+                {pmasInput.type  && <div style={{ fontSize: 13, color: C.navy, marginBottom: 4 }}>タイプ：<strong>{pmasInput.type}</strong></div>}
+                {pmasInput.bacteria && <div style={{ fontSize: 13, color: C.navy, marginBottom: 12 }}>主要の菌：<strong>{pmasInput.bacteria}</strong></div>}
+                <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.75, margin: 0 }}>
+                  PMASで自分の内側を確認したことで、ちょーちゃんが"あなた専用データ"を覚えました。体感ログを記録しながら一緒に育てていきましょう。
+                </p>
+              </div>
+            )}
+          </>}
+
+          {/* タブ3: 体感ログ */}
+          {pmasTab === 2 && <>
+            <div style={{ ...card, marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.dark, marginBottom: 8 }}>📝 体感ログを記録する</div>
+              <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.65, marginBottom: 14 }}>パーソナルプロバイオ摂取後の体感を1ヶ月ごとに記録しましょう。記録するほどちょーちゃんが進化します！</p>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>経過月数</div>
+                <select style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.offwhite }}>
+                  {[...Array(10)].map((_, i) => <option key={i} value={i+1}>{i+1}ヶ月目</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>体感スコア（1〜10）</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[...Array(10)].map((_, i) => (
+                    <button key={i} style={{ width: 36, height: 36, borderRadius: 10, border: `1.5px solid ${C.border}`, background: C.offwhite, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{i+1}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>体感カテゴリ（複数選択OK）</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {["お腹","睡眠","肌","食欲","むくみ","気分","集中力","体の軽さ"].map(t => (
+                    <button key={t} style={{ padding: "6px 12px", borderRadius: 99, border: `1.5px solid ${C.border}`, background: C.offwhite, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{t}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>メモ（任意）</div>
+                <textarea placeholder="今月の体感を記録..." rows={3}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${C.border}`, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.offwhite, resize: "vertical" }} />
+              </div>
+              <button style={btnPrimary}>体感ログを保存して進化を見る 🌟</button>
+            </div>
+
+            <div style={{ ...card, marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.dark, marginBottom: 14 }}>🗺️ 進化ロードマップ</div>
+              {[
+                { lv:1,  name:"たまごちょーちゃん",   cond:"診断完了",      done: true },
+                { lv:2,  name:"めざめちょーちゃん",   cond:"PMAS結果入力",  done: pmasSaved },
+                { lv:3,  name:"ぷにぷにちょーちゃん", cond:"1ヶ月目ログ",  done: false },
+                { lv:4,  name:"すこやかちょーちゃん", cond:"2ヶ月目ログ",  done: false },
+                { lv:5,  name:"きらめきちょーちゃん", cond:"3ヶ月目ログ",  done: false },
+                { lv:6,  name:"まもりちょーちゃん",   cond:"4ヶ月目ログ",  done: false },
+                { lv:7,  name:"めぐりちょーちゃん",   cond:"5ヶ月目ログ",  done: false },
+                { lv:8,  name:"びようちょーちゃん",   cond:"6ヶ月目ログ",  done: false },
+                { lv:9,  name:"パワーちょーちゃん",   cond:"8ヶ月目ログ",  done: false },
+                { lv:10, name:"ミラクルちょーちゃん", cond:"10ヶ月目ログ", done: false },
+              ].map((ev) => (
+                <div key={ev.lv} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, opacity: ev.done ? 1 : 0.45 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: ev.done ? C.mint : C.border, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: C.white, flexShrink: 0 }}>
+                    {ev.done ? "✓" : ev.lv}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, color: C.dark }}>{ev.name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{ev.cond}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>}
+
+          <button onClick={handleReset} style={{ ...btnSec, border: "none", color: C.muted, fontSize: 13, marginTop: 4 }}>もう一度チェックする</button>
+          <Disclaimer />
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+
   return null;
 }
