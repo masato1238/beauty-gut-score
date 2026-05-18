@@ -398,6 +398,7 @@ function PmasReportCard() {
 // ── メインアプリ ──────────────────────────────────────────────────────────────
 export default function BeautyGutScore() {
   const [screen, setScreen] = useState("top");
+  const [showMsg, setShowMsg] = useState(false);
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState(Array(20).fill(null));
   const [selected, setSelected] = useState(null);
@@ -701,7 +702,7 @@ export default function BeautyGutScore() {
 
   // ── PMAS ──────────────────────────────────────────────────────────────────
   if (screen === "pmas") {
-    const [showMsg, setShowMsg] = React.useState(false);
+    
     return (
       <div style={wrap}>
         <div style={content}>
