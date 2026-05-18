@@ -265,12 +265,12 @@ const SCORE_TYPES = [
 ];
 
 // ── スコア計算 ────────────────────────────────────────────────────────────────
-function calcTotalScore(answers) {
+function calcTotalScore(answers: number[]) {
   // 各問の最大スコアは5点、20問で100点満点
   return answers.reduce((sum, s) => sum + (s ?? 0), 0);
 }
 
-function calcCategoryScores(answers) {
+function calcCategoryScores(answers: number[]) {
   return CATEGORIES.map((cat) => {
     const scores = cat.questionIds.map((qid) => answers[qid - 1] ?? 0);
     const max = cat.questionIds.length * 5;
@@ -279,16 +279,16 @@ function calcCategoryScores(answers) {
   });
 }
 
-function getLowestCategory(catScores) {
+function getLowestCategory(catScores: any[]) {
   return catScores.reduce((min, c) => (c.score < min.score ? c : min), catScores[0]);
 }
 
-function getScoreType(total) {
+function getScoreType(total: number) {
   return SCORE_TYPES.find((t) => total >= t.min && total <= t.max) ?? SCORE_TYPES[3];
 }
 
 // ── ちょーちゃん SVG ──────────────────────────────────────────────────────────
-function ChoChan({ state }) {
+function ChoChan({ state }: { state: string }) {
   const cfg = {
     kirara:  { body: "#FFB7D5", face: "#FF8EB5", eye: "#FF5C98", cheek: "#FFD6E8", sparkles: true,  tilt: 0,   eyes: "happy",  mouth: "big-smile" },
     yuragi:  { body: "#C9B8F0", face: "#B09EE8", eye: "#8A74D6", cheek: "#DDD4F8", sparkles: false, tilt: -5,  eyes: "sleepy", mouth: "small-smile" },
@@ -700,74 +700,51 @@ export default function BeautyGutScore() {
   );
 
   // ── PMAS ──────────────────────────────────────────────────────────────────
-  if (screen === "pmas") {
-    const [showMsg, setShowMsg] = React.useState(false);
-    return (
-      <div style={wrap}>
-        <div style={content}>
-          <div style={{ paddingTop:20 }}>
-            <button onClick={() => go("result")} style={{ background:"rgba(255,107,157,0.1)", border:"none", borderRadius:12, padding:"8px 14px", fontSize:13, color:"#FF6B9D", fontWeight:800, cursor:"pointer", marginBottom:18 }}>
-              ← 結果に戻る
-            </button>
-            <div style={{ textAlign:"center", marginBottom:20 }}>
-              <div style={{ fontSize:11, fontWeight:800, color:"#FF6B9D", letterSpacing:"0.14em", marginBottom:12 }}>PMAS</div>
-              <h2 style={{ fontSize:22, fontWeight:900, color:"#2D2235", lineHeight:1.4, marginBottom:10 }}>PMASをやるには？</h2>
-              <p style={{ fontSize:13, color:"#A08090", lineHeight:1.75 }}>PMASはアムウェイのネットから確認できます。このアプリでは、PMASを始める前に知っておきたいことをまとめています。</p>
-            </div>
-            <div style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>🔬</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>PMASで確認できること</span>
-              </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>腸内環境やマイクロバイオームの状態を数値で確認できます。自分の腸内にどんな菌がいて、どんなバランスかを知るきっかけになります。</p>
-            </div>
-            <div style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>📋</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>PMASをやる前に知っておきたいこと</span>
-              </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>PMASは医療行為ではなく、腸内環境を知るための参考情報です。生活習慣の見直しや、自分に合ったサポートを考える材料になります。</p>
-            </div>
-            <div style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>📊</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>検査後に結果を見る流れ</span>
-              </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>検査キットを使って採取→送付→結果がレポートとして届きます。レポートには腸内バランスや菌の傾向が記載されています。</p>
-            </div>
-            <div style={{ ...card, marginBottom:12 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>🌿</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>結果をもとに生活習慣を見直すイメージ</span>
-              </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>食事・睡眠・ストレスなど、自分の腸内状態に合わせた生活習慣のヒントを得ることができます。感覚だけでなく、データをもとに考えるきっかけになります。</p>
-            </div>
-            <div style={{ ...card, marginBottom:16 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                <span style={{ fontSize:22 }}>🛒</span>
-                <span style={{ fontSize:13, fontWeight:800, color:"#2D2235" }}>アムウェイのネットでPMASを確認する</span>
-              </div>
-              <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>PMASはアムウェイの公式ネットから確認できます。詳しくは紹介者・担当者にご確認ください。</p>
-            </div>
-            <button onClick={() => setShowMsg(!showMsg)} style={{ ...btnPrimary, marginBottom:12 }}>
-              PMASをアムウェイのネットで確認する
-            </button>
-            {showMsg && (
-              <div style={{ ...card, background:"#FFF0F6", border:"2px solid #FFCCE0", marginBottom:16, textAlign:"center" }}>
-                <div style={{ fontSize:22, marginBottom:8 }}>📢</div>
-                <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.8, margin:0 }}>
-                  PMASはアムウェイのネットから確認できます。<br />商品名や購入方法は、紹介者・担当者に確認してください。
-                </p>
-              </div>
-            )}
-            <button onClick={handleReset} style={{ padding:"12px 0", borderRadius:99, border:"none", background:"transparent", color:"#A08090", fontSize:13, fontWeight:700, cursor:"pointer", width:"100%" }}>
-              もう一度チェックする
-            </button>
-            <Disclaimer />
+  if (screen === "pmas") return (
+    <div style={wrap}>
+      <div style={content}>
+        <div style={{ paddingTop:20 }}>
+          <button onClick={() => go("result")} style={{ background:"rgba(255,107,157,0.1)", border:"none", borderRadius:12, padding:"8px 14px", fontSize:13, color:"#FF6B9D", fontWeight:800, cursor:"pointer", marginBottom:18 }}>
+            ← 結果に戻る
+          </button>
+
+          <div style={{ textAlign:"center", marginBottom:20 }}>
+            <div style={{ fontSize:11, fontWeight:800, color:"#FF6B9D", letterSpacing:"0.14em", marginBottom:12 }}>PMAS</div>
+            <h2 style={{ fontSize:22, fontWeight:900, color:"#2D2235", lineHeight:1.4, marginBottom:14 }}>
+              本当の状態は、<br />感覚だけでは<br /><span style={{ color:"#FF6B9D" }}>わからない。</span>
+            </h2>
           </div>
+
+          <div style={{ ...card, marginBottom:14 }}>
+            <p style={{ fontSize:13, color:"#5A4060", lineHeight:1.85, margin:0 }}>
+              このセルフチェックでは、生活習慣や体感をもとに、あなたの内側のコンディションをスコア化しました。<br /><br />
+              ただし、実際の腸内環境やマイクロバイオームの状態は、感覚だけでは正確にはわかりません。<br /><br />
+              PMASでは、腸内環境やマイクロバイオームの状態を確認することで、自分の体をより深く知るきっかけになります。<br /><br />
+              体重計の数字だけを見るのではなく、まずは自分の内側を見てみませんか？
+            </p>
+          </div>
+
+          <PmasReportCard />
+
+          <a href={PMAS_URL} target="_blank" rel="noopener noreferrer"
+            style={{ display:"block", padding:"16px 0", borderRadius:99,
+              background:"linear-gradient(135deg,#FF6B9D 0%,#FF9F43 100%)",
+              color:"white", fontSize:16, fontWeight:900,
+              boxShadow:"0 6px 24px rgba(255,107,157,0.4)",
+              marginBottom:12, textAlign:"center", textDecoration:"none",
+            }}
+          >
+            PMASを購入して確認する ✨
+          </a>
+
+          <button onClick={handleReset} style={{ padding:"12px 0", borderRadius:99, border:"none", background:"transparent", color:"#A08090", fontSize:13, fontWeight:700, cursor:"pointer", width:"100%" }}>
+            もう一度チェックする
+          </button>
+          <Disclaimer />
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+
   return null;
 }
