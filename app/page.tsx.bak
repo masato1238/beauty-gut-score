@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 import { useState } from "react";
 
@@ -265,12 +264,12 @@ const SCORE_TYPES = [
 ];
 
 // ── スコア計算 ────────────────────────────────────────────────────────────────
-function calcTotalScore(answers: number[]) {
+function calcTotalScore(answers) {
   // 各問の最大スコアは5点、20問で100点満点
   return answers.reduce((sum, s) => sum + (s ?? 0), 0);
 }
 
-function calcCategoryScores(answers: number[]) {
+function calcCategoryScores(answers) {
   return CATEGORIES.map((cat) => {
     const scores = cat.questionIds.map((qid) => answers[qid - 1] ?? 0);
     const max = cat.questionIds.length * 5;
@@ -279,16 +278,16 @@ function calcCategoryScores(answers: number[]) {
   });
 }
 
-function getLowestCategory(catScores: any[]) {
+function getLowestCategory(catScores) {
   return catScores.reduce((min, c) => (c.score < min.score ? c : min), catScores[0]);
 }
 
-function getScoreType(total: number) {
+function getScoreType(total) {
   return SCORE_TYPES.find((t) => total >= t.min && total <= t.max) ?? SCORE_TYPES[3];
 }
 
 // ── ちょーちゃん SVG ──────────────────────────────────────────────────────────
-function ChoChan({ state }: { state: string }) {
+function ChoChan({ state }) {
   const cfg = {
     kirara:  { body: "#FFB7D5", face: "#FF8EB5", eye: "#FF5C98", cheek: "#FFD6E8", sparkles: true,  tilt: 0,   eyes: "happy",  mouth: "big-smile" },
     yuragi:  { body: "#C9B8F0", face: "#B09EE8", eye: "#8A74D6", cheek: "#DDD4F8", sparkles: false, tilt: -5,  eyes: "sleepy", mouth: "small-smile" },
