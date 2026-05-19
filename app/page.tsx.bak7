@@ -272,10 +272,9 @@ function GaugeBar({score,color}){return(<div style={{background:C.border,borderR
 
 // ── メインアプリ ──────────────────────────────────────────────────────────────
 export default function BeautyGutQuest() {
-  // 画面管理（localStorageで診断済みならhomeから）
-  const [screen, setScreen]   = useState("intro");
-  const [homeTab, setHomeTab] = useState(0);
-  const [initialized, setInitialized] = useState(false);
+  // 画面管理
+  const [screen, setScreen]   = useState("intro"); // intro|quiz|home|detail
+  const [homeTab, setHomeTab] = useState(0);     // 0=ちょーちゃん 1=食事記録 2=図鑑
 
   // クイズ
   const [currentQ, setCurrentQ] = useState(0);
@@ -283,52 +282,24 @@ export default function BeautyGutQuest() {
   const [selected, setSelected] = useState(null);
   const [animIn, setAnimIn]     = useState(true);
 
-  // 食事記録（朝・昼・夜）
-  const [mealInputs, setMealInputs] = useState({morning:"", afternoon:"", evening:""});
-  const [mealLogs,   setMealLogs]   = useState([]);
-  const [mealResult, setMealResult] = useState(null);
-  const [foodScore,  setFoodScore]  = useState(50);
+  // 食事記録（手入力）
+  const [mealInput, setMealInput]     = useState("");
+  const [mealLogs, setMealLogs]       = useState([]);   // [{time, text, analysis}]
+  const [mealResult, setMealResult]   = useState(null);
+  const [foodScore, setFoodScore]     = useState(50);
 
-  // サプリ入力（隠し）
-  const [showSupp,  setShowSupp]  = useState(false);
-  const [suppInput, setSuppInput] = useState("");   // 自由入力
-  const [suppTap,   setSuppTap]   = useState(0);
+  // Amwayサプリ（隠し）
+  const [showSupp, setShowSupp]     = useState(false);
+  const [todaySupp, setTodaySupp]   = useState({});
+  const [suppTap, setSuppTap]       = useState(0);
 
   // PMAS（裏ルート）
-  const [hasPmas,          setHasPmas]          = useState(false);
-  const [pmasScore,        setPmasScore]        = useState("");
-  const [showPmasHidden,   setShowPmasHidden]   = useState(false);
-  const [pmasTap,          setPmasTap]          = useState(0);
+  const [hasPmas, setHasPmas]             = useState(false);
+  const [pmasScore, setPmasScore]         = useState("");
+  const [showPmasHidden, setShowPmasHidden] = useState(false);
+  const [pmasTap, setPmasTap]             = useState(0);
 
   const [copied, setCopied] = useState(false);
-
-  // ── localStorage 初期化 ──────────────────────────────────────────────────
-  useEffect(()=>{
-    try {
-      const saved = localStorage.getItem("bgq_data");
-      if(saved){
-        const d = JSON.parse(saved);
-        if(d.answers && d.answers.every(a=>a!==null)){
-          setAnswers(d.answers);
-          setScreen("home"); // 診断済みならホームへ
-        }
-        if(d.hasPmas)   setHasPmas(d.hasPmas);
-        if(d.foodScore) setFoodScore(d.foodScore);
-        if(d.mealLogs)  setMealLogs(d.mealLogs);
-      }
-    } catch(e){}
-    setInitialized(true);
-  },[]);
-
-  // ── localStorage 保存 ────────────────────────────────────────────────────
-  useEffect(()=>{
-    if(!initialized) return;
-    try {
-      localStorage.setItem("bgq_data", JSON.stringify({
-        answers, hasPmas, foodScore, mealLogs
-      }));
-    } catch(e){}
-  },[answers, hasPmas, foodScore, mealLogs, initialized]);
 
   // 計算
   const totalScore = answers.every(a=>a!==null) ? calcTotal(answers) : 0;
@@ -339,26 +310,13 @@ export default function BeautyGutQuest() {
   const evoLv      = getEvoLv(foodScore, hasPmas);
   const isNearEvo  = EVO.some(s=>foodScore>=s.minScore-8&&foodScore<s.minScore);
 
-  // サプリ解析（Amway=プラス、他社=マイナス）
-  const analyzeSupp = (text) => {
-    if(!text.trim()) return {isAmway:false, boost:0};
-    const lower = text.toLowerCase();
-    const amwayKws = ["amway","アムウェイ","ニュートリライト","nutrilite","プロバイオ","ファイバーパウダー","ブレンドファイバー","ダブルエックス","サプリメント"];
-    const isAmway = amwayKws.some(kw=>lower.includes(kw.toLowerCase()));
-    return isAmway ? {isAmway:true, boost:20} : {isAmway:false, boost:-10};
-  };
-
   // 食事スコア更新
   useEffect(()=>{
     let base=50;
     mealLogs.forEach(log=>{ base+=log.analysis.point-50; });
-    // サプリ
-    if(suppInput.trim()){
-      const s = analyzeSupp(suppInput);
-      base += s.boost;
-    }
+    AMWAY_SUPPS.forEach(s=>{ if(todaySupp[s.key]) base+=s.boost; });
     setFoodScore(Math.max(0,Math.min(100,base)));
-  },[mealLogs, suppInput]);
+  },[mealLogs,todaySupp]);
 
   const go=(to)=>{setAnimIn(false);setTimeout(()=>{setScreen(to);setAnimIn(true);window.scrollTo(0,0);},200);};
 
@@ -371,20 +329,20 @@ export default function BeautyGutQuest() {
     else go("home");
   };
   const handleBack=()=>{
-    if(currentQ===0){return;}
+    if(currentQ===0){return;} // 初回診断はQ1から戻れない
     setSelected(answers[currentQ-1]); setCurrentQ(currentQ-1);
   };
 
-  // 食事追加（朝・昼・夜）
-  const handleAddMeal=(timeSlot)=>{
-    const text = mealInputs[timeSlot];
-    if(!text.trim())return;
-    const analysis=analyzeFoodText(text);
-    const slotLabel = {morning:"朝",afternoon:"昼",evening:"夜"}[timeSlot];
-    const newLog={time:slotLabel, text, analysis};
+  // 食事追加
+  const handleAddMeal=()=>{
+    if(!mealInput.trim())return;
+    const analysis=analyzeFoodText(mealInput);
+    const now=new Date();
+    const time=`${now.getHours()}:${String(now.getMinutes()).padStart(2,"0")}`;
+    const newLog={time, text:mealInput, analysis};
     setMealLogs(prev=>[...prev,newLog]);
     setMealResult(analysis);
-    setMealInputs(prev=>({...prev,[timeSlot]:""}));
+    setMealInput("");
   };
 
   // 隠しタップ（ちょーちゃん7回でPMAS出現）
@@ -548,14 +506,11 @@ export default function BeautyGutQuest() {
             {/* 隠しPMAS */}
             {showPmasHidden&&(
               <div style={{marginTop:14,padding:"14px",background:C.lavL,borderRadius:14,border:`1.5px dashed ${C.lavB}`,textAlign:"left"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <div style={{fontSize:11,fontWeight:800,color:C.lav}}>最終進化コード入力</div>
-                  <button onClick={()=>setShowPmasHidden(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:18,color:C.muted,lineHeight:1,padding:"0 4px",fontFamily:"inherit"}}>✕</button>
-                </div>
+                <div style={{fontSize:11,fontWeight:800,color:C.lav,marginBottom:8}}>🔬 最終進化コード入力</div>
                 <input type="number" min="0" max="100" value={pmasScore} onChange={e=>setPmasScore(e.target.value)} placeholder="PMASスコアを入力"
                   style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.lavB}`,fontSize:14,fontFamily:"inherit",outline:"none",background:C.white,marginBottom:8}}/>
                 <button onClick={()=>{if(pmasScore!==""){setHasPmas(true);setShowPmasHidden(false);}}} style={{...btnP,background:`linear-gradient(135deg,${C.lav},${C.blue})`}}>
-                  最終進化を解放する
+                  最終進化を解放する ✨
                 </button>
               </div>
             )}
@@ -640,77 +595,64 @@ export default function BeautyGutQuest() {
           {homeTab===1&&(
             <>
               <div style={{...card,marginBottom:14}}>
-                <div style={{fontSize:14,fontWeight:800,color:C.dark,marginBottom:8}}>今日の食事を入力</div>
+                <div style={{fontSize:14,fontWeight:800,color:C.dark,marginBottom:8}}>🍱 今日の食事を入力</div>
                 <p style={{fontSize:11,color:C.muted,marginBottom:12,lineHeight:1.65}}>
-                  朝・昼・夜それぞれ入力してください。<br/>
+                  食べたものを自由に入力してください。<br/>
                   「まごはやさしい」の食材は自動で判定されます！
                 </p>
 
-                {/* まごはやさしい早見表 */}
-                <div style={{background:C.mintL,borderRadius:12,padding:"10px 12px",marginBottom:14,border:`1px solid ${C.mintB}`}}>
-                  <div style={{fontSize:11,fontWeight:800,color:C.mint,marginBottom:6}}>まごはやさしい早見表</div>
+                {/* 参考 */}
+                <div style={{background:C.mintL,borderRadius:12,padding:"10px 12px",marginBottom:12,border:`1px solid ${C.mintB}`}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.mint,marginBottom:6}}>🌿 まごはやさしい早見表</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                     {Object.values(MAGO_KEYWORDS).map(m=>(
                       <span key={m.label} style={{background:C.white,borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:700,color:C.mint,border:`1px solid ${C.mintB}`}}>
-                        「{m.label}」{m.name}
+                        「{m.label}」{m.name}{m.emoji}
                       </span>
                     ))}
                   </div>
                 </div>
 
-                {/* 朝・昼・夜 入力 */}
-                {[
-                  {slot:"morning",   label:"朝ごはん", color:C.amber,  bg:"#FFFBEB", border:"#FDE68A"},
-                  {slot:"afternoon", label:"昼ごはん", color:C.blue,   bg:C.blueL,  border:C.blueB},
-                  {slot:"evening",   label:"夜ごはん", color:C.lav,    bg:C.lavL,   border:C.lavB},
-                ].map(({slot,label,color,bg,border})=>(
-                  <div key={slot} style={{marginBottom:14}}>
-                    <div style={{fontSize:12,fontWeight:800,color,marginBottom:6}}>{label}</div>
-                    <div style={{display:"flex",gap:8}}>
-                      <textarea
-                        value={mealInputs[slot]}
-                        onChange={e=>setMealInputs(prev=>({...prev,[slot]:e.target.value}))}
-                        placeholder={`例：納豆ご飯、味噌汁、サラダ`}
-                        rows={2}
-                        style={{flex:1,padding:"10px 12px",borderRadius:12,border:`1.5px solid ${border}`,fontSize:13,fontFamily:"inherit",outline:"none",background:bg,resize:"none"}}
-                      />
-                      <button onClick={()=>handleAddMeal(slot)}
-                        style={{padding:"0 14px",borderRadius:12,border:"none",background:color,color:C.white,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>
-                        記録
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                {/* 入力フォーム */}
+                <textarea value={mealInput} onChange={e=>setMealInput(e.target.value)}
+                  placeholder="例：納豆ご飯、豆腐の味噌汁、サラダ、焼き魚、ヨーグルト"
+                  rows={3}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:14,border:`1.5px solid ${C.border}`,fontSize:14,fontFamily:"inherit",outline:"none",background:C.offwhite,resize:"vertical",marginBottom:10}}
+                  onKeyDown={e=>{ if(e.key==="Enter"&&e.metaKey) handleAddMeal(); }}
+                />
+                <button onClick={handleAddMeal} style={btnP}>
+                  記録する 📝
+                </button>
 
-                {/* 判定結果 */}
+                {/* 判定結果表示 */}
                 {mealResult&&(
-                  <div style={{marginTop:4,padding:"12px 14px",background:mealResult.magoHits.length>0?C.mintL:"#FFF7ED",borderRadius:14,border:`1.5px solid ${mealResult.magoHits.length>0?C.mintB:C.coralB}`}}>
+                  <div style={{marginTop:12,padding:"12px 14px",background:mealResult.magoHits.length>0?C.mintL:"#FFF7ED",borderRadius:14,border:`1.5px solid ${mealResult.magoHits.length>0?C.mintB:C.coralB}`}}>
                     {mealResult.magoHits.length>0&&(
                       <div style={{marginBottom:8}}>
-                        <div style={{fontSize:11,fontWeight:800,color:C.mint,marginBottom:5}}>まごはやさしい検出！</div>
+                        <div style={{fontSize:11,fontWeight:800,color:C.mint,marginBottom:5}}>✅ まごはやさしい検出！</div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                           {mealResult.magoHits.map(h=>(
                             <span key={h.label} style={{background:C.white,borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:700,color:C.mint,border:`1px solid ${C.mintB}`}}>
-                              「{h.label}」{h.name} +{h.point}pt
+                              「{h.label}」{h.name} {h.emoji} +{h.point}pt
                             </span>
                           ))}
                         </div>
                       </div>
                     )}
                     {mealResult.badHits.length>0&&(
-                      <div>
-                        <div style={{fontSize:11,fontWeight:800,color:C.warn,marginBottom:5}}>腸に注意な食材</div>
+                      <div style={{marginBottom:6}}>
+                        <div style={{fontSize:11,fontWeight:800,color:C.warn,marginBottom:5}}>⚠️ 腸に注意な食材</div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                           {mealResult.badHits.map(h=>(
                             <span key={h.key} style={{background:C.white,borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:700,color:C.warn,border:"1px solid #FECACA"}}>
-                              {h.label} {h.damage}pt
+                              {h.emoji} {h.label} {h.damage}pt
                             </span>
                           ))}
                         </div>
                       </div>
                     )}
                     {mealResult.magoHits.length===0&&mealResult.badHits.length===0&&(
-                      <div style={{fontSize:12,color:C.muted}}>もう少し具体的に書いてみてください。</div>
+                      <div style={{fontSize:12,color:C.muted}}>食材が判定されませんでした。もう少し具体的に書いてみてください。</div>
                     )}
                   </div>
                 )}
@@ -719,47 +661,46 @@ export default function BeautyGutQuest() {
               {/* 今日の記録一覧 */}
               {mealLogs.length>0&&(
                 <div style={{...card,marginBottom:14}}>
-                  <div style={{fontSize:13,fontWeight:800,color:C.dark,marginBottom:10}}>今日の記録</div>
+                  <div style={{fontSize:13,fontWeight:800,color:C.dark,marginBottom:10}}>📋 今日の記録</div>
                   {mealLogs.map((log,i)=>(
                     <div key={i} style={{marginBottom:10,paddingBottom:10,borderBottom:i<mealLogs.length-1?`1px solid ${C.border}`:"none"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                        <span style={{fontSize:11,fontWeight:800,color:C.muted,background:C.offwhite,borderRadius:6,padding:"2px 8px"}}>{log.time}</span>
+                        <span style={{fontSize:11,color:C.muted}}>{log.time}</span>
                         <span style={{fontSize:11,fontWeight:800,color:log.analysis.magoHits.length>0?C.mint:C.muted}}>
                           {log.analysis.magoHits.length>0?`+${log.analysis.magoHits.reduce((s,h)=>s+h.point,0)}pt`:""}
                           {log.analysis.badHits.length>0?` ${log.analysis.badHits.reduce((s,h)=>s+h.damage,0)}pt`:""}
                         </span>
                       </div>
-                      <div style={{fontSize:13,color:C.dark}}>{log.text}</div>
+                      <div style={{fontSize:13,color:C.dark,fontWeight:600,marginBottom:4}}>{log.text}</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                        {log.analysis.magoHits.map(h=><span key={h.label} style={{fontSize:10,color:C.mint,background:C.mintL,borderRadius:6,padding:"2px 6px",fontWeight:700}}>{h.emoji}{h.name}</span>)}
+                        {log.analysis.badHits.map(h=><span key={h.key} style={{fontSize:10,color:C.warn,background:"#FEF2F2",borderRadius:6,padding:"2px 6px",fontWeight:700}}>{h.emoji}{h.label}</span>)}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* サプリ入力（隠し：「…」3回タップ） */}
+              {/* 隠しサプリ（「…」3回タップ） */}
               <div style={{textAlign:"center",marginBottom:8}}>
                 <button onClick={handleSuppTap} style={{background:"transparent",border:"none",cursor:"pointer",fontSize:10,color:"rgba(100,116,139,0.3)",fontFamily:"inherit"}}>…</button>
               </div>
               {showSupp&&(
                 <div style={{...card,marginBottom:14,background:C.mintL,border:`1.5px dashed ${C.mintB}`}}>
-                  <div style={{fontSize:12,fontWeight:800,color:C.mint,marginBottom:8}}>今日のサプリ・栄養補助食品</div>
-                  <p style={{fontSize:11,color:C.muted,marginBottom:10,lineHeight:1.6}}>飲んだサプリやプロテインを入力してください。</p>
-                  <textarea
-                    value={suppInput}
-                    onChange={e=>setSuppInput(e.target.value)}
-                    placeholder="例：ニュートリライト プロバイオ プラス&#10;例：他社プロテイン（チョコ味）"
-                    rows={3}
-                    style={{width:"100%",padding:"10px 12px",borderRadius:12,border:`1.5px solid ${C.mintB}`,fontSize:13,fontFamily:"inherit",outline:"none",background:C.white,resize:"none",marginBottom:10}}
-                  />
-                  {suppInput.trim()&&(()=>{
-                    const s = analyzeSupp(suppInput);
-                    return(
-                      <div style={{padding:"8px 12px",borderRadius:10,background:s.isAmway?C.mintL:"#FEF2F2",border:`1px solid ${s.isAmway?C.mintB:"#FECACA"}`}}>
-                        <span style={{fontSize:12,fontWeight:800,color:s.isAmway?C.mint:C.warn}}>
-                          {s.isAmway ? `Amway製品を確認！ +${s.boost}pt` : `他社サプリ ${s.boost}pt`}
-                        </span>
-                      </div>
-                    );
-                  })()}
+                  <div style={{fontSize:12,fontWeight:800,color:C.mint,marginBottom:10}}>💊 今日のサプリ</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {AMWAY_SUPPS.map(s=>{
+                      const checked=!!todaySupp[s.key];
+                      return(
+                        <button key={s.key} onClick={()=>setTodaySupp(prev=>({...prev,[s.key]:!prev[s.key]}))}
+                          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,border:"none",cursor:"pointer",background:checked?C.white:"#F0FDF4",border:checked?`1.5px solid ${C.mintB}`:`1px solid ${C.mintB}`,fontFamily:"inherit"}}>
+                          <span style={{fontSize:18}}>{s.emoji}</span>
+                          <span style={{fontSize:13,fontWeight:checked?800:600,color:checked?C.mint:C.dark,flex:1,textAlign:"left"}}>{s.label}</span>
+                          <span style={{fontSize:11,color:checked?C.mint:C.muted,fontWeight:800}}>{checked?"✓ 記録済み":`+${s.boost}pt`}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </>
